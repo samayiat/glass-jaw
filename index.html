@@ -607,28 +607,39 @@ const ARM_U = 0.40, ARM_F = 0.44;
 
 // one two-bone IK solver, used by both the legs and the arms.
 // bendDir says which way the joint breaks: knees forward, elbows down and out.
-const _tb = new V3(), _dirN = new V3(), _bnd = new V3(), _jnt = new V3();
+// STRETCH_MAX bounds the reach: past full extension the limb can flex a little
+// further (a real arm reaching for something just out of range), but the root
+// and tip are driven by gameplay targets that can wander arbitrarily far apart
+// (a punch aimed past the opponent's centre, a planted foot left behind by a
+// quick step) — without a ceiling here the bone between them stretches to
+// match, however far that is. Past the cap the drawn limb simply stops
+// short of its target rather than growing without limit.
+const STRETCH_MAX = 1.25;
+const _tb = new V3(), _dirN = new V3(), _bnd = new V3(), _jnt = new V3(), _vtip = new V3();
 function solveTwoBone(b1, b2, joint, root, tip, L1, L2, bendDir){
   _tb.subVectors(tip, root);
   let d = _tb.length();
   if(d < 1e-4){ _tb.set(0,-1,0); d = 1e-4; }
   _dirN.copy(_tb).divideScalar(d);
-  if(d >= L1 + L2){
+  const maxD = (L1 + L2) * STRETCH_MAX;
+  const visD = Math.min(d, maxD);
+  _vtip.copy(root).addScaledVector(_dirN, visD);
+  if(visD >= L1 + L2){
     // past full extension the arm is a straight line with no visible bend, so
     // rather than snapping short we let it reach and share the stretch across
     // both bones — the elbow stays at its proper proportion along the limb.
-    _jnt.copy(root).addScaledVector(_dirN, d * (L1/(L1+L2)));
+    _jnt.copy(root).addScaledVector(_dirN, visD * (L1/(L1+L2)));
   } else {
     _bnd.copy(bendDir);
     _bnd.addScaledVector(_dirN, -_bnd.dot(_dirN));      // orthogonalise
     if(_bnd.lengthSq() < 1e-5){ _bnd.set(0,-1,0).addScaledVector(_dirN, _dirN.y); }
     _bnd.normalize();
-    const a = (L1*L1 - L2*L2 + d*d) / (2*d);
+    const a = (L1*L1 - L2*L2 + visD*visD) / (2*visD);
     const h = Math.sqrt(Math.max(0, L1*L1 - a*a));
     _jnt.copy(root).addScaledVector(_dirN, a).addScaledVector(_bnd, h);
   }
   orient(b1, root, _jnt);
-  orient(b2, _jnt, tip);
+  orient(b2, _jnt, _vtip);
   if(joint) joint.position.copy(_jnt);
 }
 
