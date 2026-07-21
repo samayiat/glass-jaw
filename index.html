@@ -256,11 +256,10 @@
   #bJab{right:92px;bottom:86px;} #bCross{right:26px;bottom:86px;}
   #bHook{right:92px;bottom:22px;} #bUp{right:26px;bottom:22px;background:rgba(255,45,85,.3);}
   #bBlk{left:150px;bottom:22px;width:56px;}
-  #bQ{left:150px;bottom:86px;width:56px;font-size:8px;}
-  #bE{left:214px;bottom:86px;width:56px;font-size:8px;}
   #stickZone{position:absolute;left:0;bottom:0;width:140px;height:150px;pointer-events:auto;}
-  #stick{position:absolute;left:22px;bottom:22px;width:100px;height:100px;border-radius:50%;
-    border:1.5px dashed rgba(255,246,227,.28);}
+  #stick{position:absolute;left:34px;bottom:30px;width:100px;height:100px;border-radius:50%;
+    border:1.5px dashed rgba(255,246,227,.28);transition:transform .2s ease;}
+  #stick.dragging{transition:none;}
   #nub{position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px 0 0 -20px;
     border-radius:50%;background:rgba(255,246,227,.28);border:1px solid rgba(255,246,227,.5);}
 </style>
@@ -298,8 +297,6 @@
 
   <div id="pad">
     <div id="stickZone"><div id="stick"><div id="nub"></div></div></div>
-    <div class="btn" id="bQ">Slip L</div>
-    <div class="btn" id="bE">Slip R</div>
     <div class="btn" id="bBlk">Block</div>
     <div class="btn" id="bJab">Jab</div>
     <div class="btn" id="bCross">Cross</div>
@@ -2244,15 +2241,49 @@ hold('bJab',   () => tryPunch('jab'));
 hold('bCross', () => tryPunch('cross'));
 hold('bHook',  () => tryPunch('hook'));
 hold('bUp',    () => { if(G.meter >= G.meterMax) fireSuper(); else tryPunch('upper'); });
-hold('bQ',     () => slip(-1));
-hold('bE',     () => slip(1));
 hold('bBlk',   () => { BLOCK.touch = true; }, () => { BLOCK.touch = false; });
 
-// stick — deltas get un-rotated by hand when the app is CSS-rotated
-const nub = el('nub');
+// screen space -> app space: the app itself is CSS-rotated 90deg on portrait
+// phones to fake a landscape lock, so a raw clientX/clientY doesn't line up
+// with anything drawn inside it. Both the stick and the slip swipe need the
+// touch point translated into the app's own unrotated coordinate box.
+function appPoint(px, py){
+  if(!rotated) return { x:px, y:py };
+  const cx = innerWidth/2, cy = innerHeight/2;
+  return { x: VW/2 + (py - cy), y: VH/2 - (px - cx) };
+}
+
+// slip is a swipe on the punching hand's side, not a dedicated button — swipe
+// left to slip left, right to slip right, anywhere over on that half.
+const SLIP = { id:null, x0:0, y0:0, fired:false };
+const SLIP_DIST = 32;
+el('pad').addEventListener('pointerdown', function(e){
+  if(appPoint(e.clientX, e.clientY).x < VW/2) return;   // footwork hand doesn't slip
+  SLIP.id = e.pointerId; SLIP.x0 = e.clientX; SLIP.y0 = e.clientY; SLIP.fired = false;
+});
+addEventListener('pointermove', function(e){
+  if(e.pointerId !== SLIP.id || SLIP.fired) return;
+  let dx = e.clientX - SLIP.x0, dy = e.clientY - SLIP.y0;
+  if(rotated){ const t = dx; dx = dy; dy = -t; }
+  if(Math.abs(dx) > SLIP_DIST && Math.abs(dx) > Math.abs(dy)){
+    slip(dx > 0 ? 1 : -1); SLIP.fired = true;
+  }
+});
+addEventListener('pointerup', function(e){ if(e.pointerId === SLIP.id) SLIP.id = null; });
+
+// stick — a floating base that recentres on wherever the thumb lands, then
+// eases back home on release. Deltas (and the touch point itself) get
+// un-rotated by hand when the app is CSS-rotated.
+const nub = el('nub'), stick = el('stick');
+const STICK_HOME = { x:34+50, y:0 };           // y filled in once VH is known (below)
 let stickId = null, sx0 = 0, sy0 = 0;
 el('stickZone').addEventListener('pointerdown', function(e){
   e.preventDefault(); stickId = e.pointerId; sx0 = e.clientX; sy0 = e.clientY;
+  STICK_HOME.y = VH - 30 - 50;
+  const p = appPoint(e.clientX, e.clientY);
+  const cx = clamp(p.x, 50, 90), cy = clamp(p.y, VH-100, VH-50);
+  stick.classList.add('dragging');
+  stick.style.transform = 'translate(' + (cx-STICK_HOME.x) + 'px,' + (cy-STICK_HOME.y) + 'px)';
 });
 addEventListener('pointermove', function(e){
   if(e.pointerId !== stickId) return;
@@ -2267,6 +2298,8 @@ addEventListener('pointerup', function(e){
   if(e.pointerId !== stickId) return;
   stickId = null; smove.x = 0; smove.z = 0;
   nub.style.transform = '';
+  stick.classList.remove('dragging');
+  stick.style.transform = '';
 });
 // ============================================================ pause & extras
 let paused = false;

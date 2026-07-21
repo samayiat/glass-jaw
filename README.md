@@ -42,4 +42,4 @@ Keyboard: `WASD` footwork · `J K L I` jab/cross/hook/upper · `Q E` slip ·
 Xbox pad: `LT/RT` slip · `LB/RB` block · `X Y A B` punch · `R3` flurry ·
 left stick footwork · `Start` pause.
 
-Touch: thumbstick left, punches right.
+Touch: thumbstick left, punches right, swipe left/right on the punching side to slip.
