@@ -1,0 +1,3042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Glass Jaw</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#08060E">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Glass Jaw">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#08060E; --bone:#FFF6E3; --lemon:#FFE03D;
+    --blood:#FF2D55; --violet:#8B3BFF; --cyan:#25E5FF;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;overflow:hidden;background:#000;}
+  body{font-family:'DM Mono',ui-monospace,monospace;color:var(--bone);
+    -webkit-tap-highlight-color:transparent;touch-action:none;user-select:none;
+    -webkit-user-select:none;}
+
+  /* the whole game lives in here — when the device is portrait this gets
+     rotated 90deg, so the game is landscape no matter how you hold it */
+  #app{position:fixed;left:50%;top:50%;transform-origin:50% 50%;
+    transform:translate(-50%,-50%);overflow:hidden;background:#000;}
+  #stage{position:absolute;inset:0;}
+  canvas{display:block;width:100%;height:100%;}
+
+  /* ---------------- HUD ---------------- */
+  #hud{position:absolute;inset:0;pointer-events:none;}
+  #vig{position:absolute;inset:0;box-shadow:inset 0 0 190px 34px rgba(0,0,0,.85);}
+  #tint{position:absolute;inset:0;opacity:0;}
+
+  #foe{position:absolute;top:20px;left:50%;transform:translateX(-50%);width:min(520px,44%);}
+  #foe .name{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;}
+  #foe .name h2{font-family:'Anton',sans-serif;font-size:17px;letter-spacing:.16em;
+    transform:skewX(-9deg);text-transform:uppercase;}
+  #foe .name span{font-size:9px;letter-spacing:.2em;opacity:.55;text-transform:uppercase;}
+  .bar{height:12px;background:rgba(255,246,227,.09);transform:skewX(-16deg);
+    border:1px solid rgba(255,246,227,.22);overflow:hidden;position:relative;}
+  .bar i{position:absolute;inset:0;transform-origin:left;display:block;}
+  #foeGhost{background:var(--bone);opacity:.34;transition:transform .5s cubic-bezier(.2,.9,.2,1) .18s;}
+  #foeFill{background:linear-gradient(90deg,var(--blood),var(--lemon));}
+  #foeFill.low{background:linear-gradient(90deg,var(--blood),#fff);animation:panic .35s infinite;}
+  @keyframes panic{50%{filter:brightness(1.9);}}
+
+  #me{position:absolute;left:20px;top:20px;width:170px;}
+  #me .lab,#super .lab{font-size:8.5px;letter-spacing:.22em;opacity:.6;margin-bottom:5px;text-transform:uppercase;}
+  #meFill{background:linear-gradient(90deg,var(--cyan),var(--bone));}
+
+  #super{position:absolute;right:20px;top:20px;width:170px;text-align:right;}
+  #superFill{background:linear-gradient(90deg,var(--violet),var(--cyan));}
+  #super.ready .lab{opacity:1;color:var(--lemon);animation:blink .5s steps(2) infinite;}
+  #super.ready #superFill{background:linear-gradient(90deg,var(--lemon),#fff);}
+  #super.ready .bar{border-color:var(--lemon);box-shadow:0 0 22px rgba(255,224,61,.7);}
+  @keyframes blink{50%{opacity:.25;}}
+
+  /* range readout — tells you if you can actually reach him */
+  #rng{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);
+    font-size:9px;letter-spacing:.22em;text-transform:uppercase;opacity:.5;white-space:nowrap;}
+  #rng b{font-weight:500;color:var(--lemon);}
+  #rng.far b{color:var(--blood);}
+
+  #combo{position:absolute;right:4%;top:34%;text-align:right;opacity:0;transform-origin:100% 50%;}
+  #combo b{font-family:'Anton',sans-serif;font-size:82px;line-height:.8;display:block;
+    transform:skewX(-11deg);color:var(--bone);
+    text-shadow:5px 5px 0 var(--blood), 9px 9px 0 rgba(139,59,255,.55);}
+  #combo i{font-family:'Anton',sans-serif;font-style:normal;font-size:19px;letter-spacing:.2em;
+    display:block;transform:skewX(-11deg);color:var(--lemon);margin-top:2px;}
+  #combo.pop{animation:pop .38s cubic-bezier(.16,1.5,.3,1);}
+  @keyframes pop{0%{transform:scale(1.9) skewX(6deg);}100%{transform:scale(1) skewX(0);}}
+
+  #shout{position:absolute;left:50%;top:20%;transform:translateX(-50%);
+    font-family:'Anton',sans-serif;font-size:40px;letter-spacing:.06em;opacity:0;
+    text-transform:uppercase;white-space:nowrap;}
+
+  #dmg{position:absolute;inset:0;overflow:hidden;}
+  .num{position:absolute;font-family:'Anton',sans-serif;font-size:28px;
+    transform:skewX(-8deg);text-shadow:2px 3px 0 rgba(0,0,0,.65);will-change:transform,opacity;}
+  @keyframes rise{
+    0%{transform:translate(-50%,0) scale(1.6) skewX(-8deg);opacity:1;}
+    18%{transform:translate(-50%,-13px) scale(1) skewX(-8deg);opacity:1;}
+    100%{transform:translate(-50%,-84px) scale(.85) skewX(-8deg);opacity:0;}
+  }
+
+  /* ---------------- overlay ---------------- */
+  #veil{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:18px;
+    background:radial-gradient(110% 80% at 50% 50%, rgba(20,6,30,.74), rgba(4,2,8,.96));z-index:5;}
+  #veil.hide{display:none;}
+  .card{max-width:660px;}
+  /* no vw/vh anywhere inside #app — when the app is CSS-rotated those units
+     still measure the real screen, not the game area. px and % only. */
+  h1{font-family:'Anton',sans-serif;font-size:64px;line-height:.82;
+    transform:skewX(-10deg);text-transform:uppercase;}
+  h1 .a{color:var(--bone);text-shadow:5px 5px 0 var(--blood),10px 10px 0 var(--violet);}
+  h1 .b{display:block;color:var(--lemon);text-shadow:5px 5px 0 rgba(37,229,255,.9);}
+  .sub{margin-top:12px;font-size:10.5px;letter-spacing:.14em;opacity:.7;text-transform:uppercase;}
+  .moves{margin:16px auto 0;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:620px;}
+  .mv{display:flex;justify-content:space-between;gap:10px;border-left:2px solid var(--blood);
+    padding:6px 9px;background:rgba(255,246,227,.05);font-size:9.5px;letter-spacing:.08em;}
+  .mv b{color:var(--lemon);font-weight:500;}
+  .mv span{opacity:.62;text-transform:uppercase;}
+  button{margin-top:18px;font-family:'Anton',sans-serif;font-size:18px;letter-spacing:.2em;
+    text-transform:uppercase;background:var(--lemon);color:#0B0710;border:0;padding:13px 40px;
+    cursor:pointer;transform:skewX(-10deg);pointer-events:auto;}
+  button:hover{background:#fff;}
+  button:focus-visible{outline:3px solid var(--cyan);outline-offset:4px;}
+  .stats{margin-top:14px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;}
+  .stats b{color:var(--lemon);font-weight:500;}
+
+  /* bout pips — the night's card, one mark per man */
+  #pips{display:flex;gap:4px;margin-top:6px;justify-content:center;}
+  #pips .pip{flex:1;height:3px;background:rgba(255,246,227,.16);display:block;
+    transform:skewX(-16deg);}
+  #pips .pip.won{background:var(--lemon);}
+  #pips .pip.now{background:var(--bone);animation:blink .7s steps(2) infinite;}
+
+  /* the corner: who's next and why he's a problem */
+  .eyebrow{font-size:9px;letter-spacing:.34em;text-transform:uppercase;opacity:.5;margin-bottom:14px;}
+  .heal{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;}
+  .heal b{color:#fff;}
+  .who{font-family:'Anton',sans-serif;font-size:42px;line-height:.94;transform:skewX(-9deg);
+    text-transform:uppercase;letter-spacing:.01em;text-shadow:4px 4px 0 rgba(0,0,0,.6);}
+  .rec{margin-top:8px;font-size:10px;letter-spacing:.24em;text-transform:uppercase;opacity:.6;}
+  .warn{margin-top:16px;font-size:13px;line-height:1.7;letter-spacing:.02em;max-width:440px;
+    margin-left:auto;margin-right:auto;}
+  .tip{margin-top:12px;font-size:10.5px;line-height:1.7;letter-spacing:.04em;opacity:.62;
+    max-width:440px;margin-left:auto;margin-right:auto;}
+  .tip b{color:var(--lemon);opacity:1;font-weight:500;}
+  #cardBtns{display:flex;justify-content:center;align-items:center;gap:10px;}
+  button.ghost{background:transparent;color:var(--bone);font-size:13px;padding:13px 24px;
+    box-shadow:inset 0 0 0 1.5px rgba(255,246,227,.35);}
+  button.ghost:hover{background:rgba(255,246,227,.12);color:var(--bone);}
+
+  /* ---------------- comic lettering ---------------- */
+  #pow{position:absolute;inset:0;overflow:hidden;}
+  .pw{position:absolute;font-family:'Anton',sans-serif;text-transform:uppercase;
+    color:var(--lemon);-webkit-text-stroke:7px #0A0610;paint-order:stroke fill;
+    text-shadow:7px 7px 0 var(--blood);white-space:nowrap;opacity:0;
+    letter-spacing:.02em;will-change:transform,opacity;}
+  @keyframes pw{
+    0%{opacity:1;transform:translate(-50%,-50%) rotate(var(--r)) scale(.25);}
+    12%{opacity:1;transform:translate(-50%,-50%) rotate(var(--r)) scale(1.22);}
+    22%{transform:translate(-50%,-50%) rotate(var(--r)) scale(1);}
+    72%{opacity:1;transform:translate(-50%,-50%) rotate(var(--r)) scale(1);}
+    100%{opacity:0;transform:translate(-50%,-50%) rotate(var(--r)) scale(1.14);}
+  }
+
+  /* ---------------- pause sheet ---------------- */
+  #pause{position:absolute;inset:0;z-index:7;display:none;place-items:center;padding:20px;
+    background:rgba(8,6,14,.82);}
+  #pause.on{display:grid;}
+  #pause .sheet{width:min(560px,92%);border:1px solid rgba(255,246,227,.2);
+    background:rgba(12,8,20,.9);padding:20px 22px;}
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;margin:14px 0 4px;}
+  .opt{display:flex;justify-content:space-between;align-items:center;gap:12px;
+    font-size:10px;letter-spacing:.14em;text-transform:uppercase;opacity:.85;
+    padding:7px 0;border-bottom:1px solid rgba(255,246,227,.1);cursor:pointer;}
+  .opt.wide{grid-column:1/-1;}
+  .opt b{color:var(--lemon);font-weight:500;}
+  .opt input[type=checkbox]{appearance:none;width:34px;height:16px;background:rgba(255,246,227,.16);
+    position:relative;cursor:pointer;transition:background .15s;flex:none;}
+  .opt input[type=checkbox]:checked{background:var(--lemon);}
+  .opt input[type=checkbox]::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;
+    background:var(--bone);transition:transform .15s;}
+  .opt input[type=checkbox]:checked::after{transform:translateX(18px);background:#0B0710;}
+  .opt input[type=range]{appearance:none;width:170px;height:2px;background:rgba(255,246,227,.25);cursor:pointer;}
+  .opt input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:12px;background:var(--lemon);cursor:pointer;}
+  .opt input[type=range]::-moz-range-thumb{border:0;width:12px;height:12px;background:var(--lemon);cursor:pointer;}
+  .keyref{margin-top:12px;font-size:8.5px;letter-spacing:.1em;line-height:2;opacity:.5;text-transform:uppercase;}
+  .keyref b{color:var(--bone);opacity:.9;font-weight:500;}
+  .pbtns{display:flex;gap:10px;margin-top:6px;}
+  .pbtns button{margin-top:12px;font-size:14px;padding:11px 26px;}
+
+  /* ---------------- install ---------------- */
+  #install{display:none;margin-top:14px;}
+  body.installable #install, body.ios-install #install{display:inline-block;}
+  button.install{background:transparent;color:var(--lemon);font-size:12px;padding:10px 20px;
+    box-shadow:inset 0 0 0 1.5px var(--lemon);}
+  button.install:hover{background:var(--lemon);color:#0B0710;}
+
+  /* ---------------- mode select ---------------- */
+  .modes{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:18px auto 0;max-width:600px;}
+  .mode{text-align:left;border:1px solid rgba(255,246,227,.18);background:rgba(255,246,227,.04);
+    padding:11px 13px;cursor:pointer;transition:background .12s,border-color .12s;}
+  .mode:hover,.mode:focus-visible{background:rgba(255,224,61,.1);border-color:var(--lemon);outline:none;}
+  .mode h3{font-family:'Anton',sans-serif;font-size:19px;letter-spacing:.06em;transform:skewX(-8deg);
+    text-transform:uppercase;line-height:1;}
+  .mode .tag{font-size:8px;letter-spacing:.2em;text-transform:uppercase;color:var(--lemon);margin-top:5px;}
+  .mode p{font-size:9.5px;line-height:1.7;opacity:.6;margin-top:6px;}
+  .picks{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:16px auto 0;max-width:600px;}
+  .pick{display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;
+    border:1px solid rgba(255,246,227,.16);background:rgba(255,246,227,.04);padding:8px 11px;
+    font-size:10px;letter-spacing:.08em;text-align:left;}
+  .pick:hover{background:rgba(255,224,61,.1);border-color:var(--lemon);}
+  .pick i{font-style:normal;font-size:8px;letter-spacing:.16em;opacity:.55;text-transform:uppercase;}
+
+  /* ---------------- controller ---------------- */
+  #toast{position:absolute;left:50%;bottom:7%;transform:translateX(-50%);z-index:6;
+    font-size:8.5px;letter-spacing:.26em;text-transform:uppercase;opacity:0;
+    background:rgba(8,6,14,.72);border:1px solid rgba(255,246,227,.28);
+    padding:8px 14px;pointer-events:none;transition:opacity .4s ease;white-space:nowrap;}
+  #toast.on{opacity:.9;}
+  .padrow{display:none;margin:14px auto 0;max-width:560px;font-size:9px;
+    letter-spacing:.12em;line-height:2.1;opacity:.8;text-transform:uppercase;}
+  body.pad .padrow{display:block;}
+  .padrow b{display:inline-block;min-width:26px;color:#0B0710;background:var(--lemon);
+    font-weight:500;padding:1px 5px;margin:0 3px;}
+  .padrow em{font-style:normal;opacity:.5;margin:0 5px;}
+
+  /* ---------------- replay broadcast ---------------- */
+  #hud{transition:opacity .3s ease;}
+  #replay{position:absolute;inset:0;pointer-events:none;opacity:0;
+    transition:opacity .25s ease;z-index:3;}
+  #replay.on{opacity:1;pointer-events:auto;}
+  .lb{position:absolute;left:0;right:0;height:9%;background:#000;
+    transition:transform .45s cubic-bezier(.2,.9,.2,1);}
+  .lbTop{top:0;transform:translateY(-100%);}
+  .lbBot{bottom:0;transform:translateY(100%);}
+  #replay.on .lbTop,#replay.on .lbBot{transform:translateY(0);}
+  #rpCut{position:absolute;inset:0;background:#fff;opacity:0;}
+  #rpCut.flash{animation:cutFlash .16s ease-out;}
+  @keyframes cutFlash{0%{opacity:.5;}100%{opacity:0;}}
+  #rpInfo{position:absolute;left:26px;bottom:12%;}
+  #rpTag{display:flex;align-items:center;gap:6px;font-size:9px;letter-spacing:.32em;
+    text-transform:uppercase;opacity:.75;margin-bottom:5px;}
+  #rpTag i{width:6px;height:6px;border-radius:50%;background:var(--blood);
+    animation:blink .8s steps(2) infinite;}
+  #rpName{font-family:'Anton',sans-serif;font-size:32px;letter-spacing:.06em;
+    transform:skewX(-9deg);text-transform:uppercase;line-height:1;
+    text-shadow:3px 3px 0 rgba(0,0,0,.7);}
+  #rpSub{font-size:9.5px;letter-spacing:.16em;opacity:.5;margin-top:5px;text-transform:uppercase;}
+  #rpNum{position:absolute;right:26px;bottom:12%;font-family:'Anton',sans-serif;
+    font-size:26px;letter-spacing:.1em;transform:skewX(-9deg);opacity:.8;}
+  #rpBarWrap{position:absolute;left:26px;right:26px;bottom:calc(9% + 14px);height:1px;
+    background:rgba(255,246,227,.2);}
+  #rpBar{display:block;height:2px;margin-top:-1px;background:var(--lemon);
+    transform-origin:left;transform:scaleX(0);}
+  #rpSkip{position:absolute;right:26px;top:calc(9% + 14px);font-size:8.5px;
+    letter-spacing:.24em;text-transform:uppercase;opacity:.35;}
+
+  /* ---------------- touch pad ---------------- */
+  #pad{position:absolute;inset:0;display:none;pointer-events:none;z-index:4;}
+  body.touch #pad{display:block;}
+  .btn{position:absolute;pointer-events:auto;width:56px;height:56px;border-radius:50%;
+    border:1.5px solid rgba(255,246,227,.4);background:rgba(255,246,227,.09);
+    display:grid;place-items:center;font-size:8.5px;letter-spacing:.06em;
+    font-family:'Anton',sans-serif;text-transform:uppercase;backdrop-filter:blur(3px);}
+  .btn:active{background:var(--lemon);color:#0B0710;}
+  #bJab{right:92px;bottom:86px;} #bCross{right:26px;bottom:86px;}
+  #bHook{right:92px;bottom:22px;} #bUp{right:26px;bottom:22px;background:rgba(255,45,85,.3);}
+  #bBlk{left:150px;bottom:22px;width:56px;}
+  #bQ{left:150px;bottom:86px;width:56px;font-size:8px;}
+  #bE{left:214px;bottom:86px;width:56px;font-size:8px;}
+  #stickZone{position:absolute;left:0;bottom:0;width:140px;height:150px;pointer-events:auto;}
+  #stick{position:absolute;left:22px;bottom:22px;width:100px;height:100px;border-radius:50%;
+    border:1.5px dashed rgba(255,246,227,.28);}
+  #nub{position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px 0 0 -20px;
+    border-radius:50%;background:rgba(255,246,227,.28);border:1px solid rgba(255,246,227,.5);}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage"></div>
+
+  <div id="hud">
+    <div id="vig"></div>
+    <div id="tint"></div>
+
+    <div id="foe">
+      <div class="name"><h2 id="foeName">—</h2><span id="foeRec">—</span></div>
+      <div class="bar"><i id="foeGhost"></i><i id="foeFill"></i></div>
+      <div id="pips"></div>
+    </div>
+
+    <div id="me">
+      <div class="lab">Your chin</div>
+      <div class="bar"><i id="meFill"></i></div>
+    </div>
+
+    <div id="super">
+      <div class="lab">Adrenaline</div>
+      <div class="bar"><i id="superFill"></i></div>
+    </div>
+
+    <div id="rng">Range <b id="rngV">—</b></div>
+    <div id="combo"><b id="comboN">0</b><i id="comboR">HIT</i></div>
+    <div id="shout"></div>
+    <div id="dmg"></div>
+    <div id="pow"></div>
+  </div>
+
+  <div id="pad">
+    <div id="stickZone"><div id="stick"><div id="nub"></div></div></div>
+    <div class="btn" id="bQ">Slip L</div>
+    <div class="btn" id="bE">Slip R</div>
+    <div class="btn" id="bBlk">Block</div>
+    <div class="btn" id="bJab">Jab</div>
+    <div class="btn" id="bCross">Cross</div>
+    <div class="btn" id="bHook">Hook</div>
+    <div class="btn" id="bUp">Upper</div>
+  </div>
+
+  <div id="pause">
+    <div class="sheet">
+      <div class="eyebrow">Paused</div>
+      <div class="opts">
+        <label class="opt"><span>Vibration</span><input type="checkbox" id="optVibe" checked></label>
+        <label class="opt"><span>Controller rumble</span><input type="checkbox" id="optRumble" checked></label>
+        <label class="opt wide"><span>Squish <b id="optSquishV">100%</b></span>
+          <input type="range" id="optSquish" min="0" max="150" value="100"></label>
+      </div>
+      <div class="keyref" id="keyref"></div>
+      <div class="pbtns">
+        <button id="pResume">Resume</button>
+        <button id="pQuit" class="ghost">Quit to menu</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <div id="replay">
+    <div class="lb lbTop"></div>
+    <div class="lb lbBot"></div>
+    <div id="rpCut"></div>
+    <div id="rpInfo">
+      <div id="rpTag"><i></i>Replay</div>
+      <div id="rpName">BROADCAST</div>
+      <div id="rpSub">the shot that did it</div>
+    </div>
+    <div id="rpNum">1 / 4</div>
+    <div id="rpBarWrap"><i id="rpBar"></i></div>
+    <div id="rpSkip">any key to skip</div>
+  </div>
+
+  <div id="veil">
+    <div class="card">
+      <div id="cardBody"></div>
+      <div id="cardBtns"><button id="go">Touch gloves</button></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+
+const V3 = THREE.Vector3;
+const K = { bone:0xFFF6E3, lemon:0xFFE03D, blood:0xFF2D55, violet:0x8B3BFF, cyan:0x25E5FF };
+const RING = 3.35;            // half-width of the fighting area
+const clamp = (v,a,b) => v < a ? a : (v > b ? b : v);
+
+// ============================================================ landscape lock
+const app = document.getElementById('app');
+let VW = 0, VH = 0, rotated = false;
+if(matchMedia('(pointer:coarse)').matches) document.body.classList.add('touch');
+
+function layout(){
+  rotated = innerHeight > innerWidth;
+  VW = rotated ? innerHeight : innerWidth;
+  VH = rotated ? innerWidth  : innerHeight;
+  app.style.width  = VW + 'px';
+  app.style.height = VH + 'px';
+  app.style.transform = 'translate(-50%,-50%)' + (rotated ? ' rotate(90deg)' : '');
+  if(window.__resizeGL) window.__resizeGL();
+}
+layout();
+addEventListener('resize', layout);
+addEventListener('orientationchange', () => setTimeout(layout, 120));
+
+// try for a real hardware lock on the way in; the CSS rotation covers us when it fails
+function forceLandscape(){
+  try{
+    const de = document.documentElement;
+    if(!document.fullscreenElement && de.requestFullscreen) {
+      const p = de.requestFullscreen();
+      if(p && p.then) p.then(lockIt).catch(lockIt);
+      else lockIt();
+    } else lockIt();
+  }catch(e){}
+  function lockIt(){
+    try{
+      if(screen.orientation && screen.orientation.lock) {
+        const p = screen.orientation.lock('landscape');
+        if(p && p.catch) p.catch(function(){});
+      }
+    }catch(e){}
+    setTimeout(layout, 200);
+  }
+}
+
+// ============================================================ renderer
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+const DPR = Math.min(devicePixelRatio, 2);
+renderer.setPixelRatio(DPR);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x08060E, 0.07);
+const camera = new THREE.PerspectiveCamera(56, 1, 0.1, 120);
+
+const rt = new THREE.WebGLRenderTarget(2, 2, {
+  minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter, format:THREE.RGBAFormat
+});
+window.__resizeGL = function(){
+  if(!VW) return;
+  renderer.setSize(VW, VH);
+  rt.setSize(Math.floor(VW*DPR), Math.floor(VH*DPR));
+  camera.aspect = VW/VH;
+  camera.updateProjectionMatrix();
+};
+window.__resizeGL();
+
+// ============================================================ post stack
+const postScene = new THREE.Scene();
+const postCam = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+const POST = new THREE.ShaderMaterial({
+  uniforms:{
+    tDiffuse:{value:rt.texture},
+    uAber:{value:0}, uZoom:{value:0}, uFlash:{value:0}, uGlitch:{value:0},
+    uShock:{value:0}, uSat:{value:1}, uTime:{value:0}, uImpact:{value:0},
+    uFlashCol:{value:new THREE.Color(0xffffff)},
+    uImpA:{value:new THREE.Color(0xFFE03D)}, uImpB:{value:new THREE.Color(0x0A0610)}
+  },
+  vertexShader:'varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }',
+  fragmentShader:[
+  'uniform sampler2D tDiffuse;',
+  'uniform float uAber,uZoom,uFlash,uGlitch,uShock,uSat,uTime,uImpact;',
+  'uniform vec3 uFlashCol, uImpA, uImpB;',
+  'varying vec2 vUv;',
+  'float hash(float n){ return fract(sin(n)*43758.5453); }',
+  'void main(){',
+  '  vec2 uv = vUv; vec2 c = uv - 0.5;',
+  '  float r = length(c);',
+  '  vec2 dir = c / max(r, 0.0001);',
+  '  if(uShock > 0.001){',
+  '    float d = abs(r - uShock*0.85);',
+  '    float w = smoothstep(0.10, 0.0, d) * (1.0 - uShock);',
+  '    uv += dir * w * 0.075;',
+  '  }',
+  '  if(uGlitch > 0.001){',
+  '    float band = floor(uv.y*22.0);',
+  '    float n = hash(band*13.13 + floor(uTime*46.0));',
+  '    uv.x += (n-0.5) * uGlitch * 0.14 * step(0.55, n);',
+  '  }',
+  '  float ab = uAber * (0.18 + r*1.4);',
+  '  vec3 sum = vec3(0.0); float tot = 0.0;',
+  '  for(int i=0;i<6;i++){',
+  '    float t = float(i)/5.0;',
+  '    vec2 s = uv - c * uZoom * t;',
+  '    float w = 1.0 - t*0.55;',
+  '    sum.r += texture2D(tDiffuse, s + dir*ab).r * w;',
+  '    sum.g += texture2D(tDiffuse, s).g * w;',
+  '    sum.b += texture2D(tDiffuse, s - dir*ab).b * w;',
+  '    tot += w;',
+  '  }',
+  '  vec3 col = sum / tot;',
+  '  float l = dot(col, vec3(0.299,0.587,0.114));',
+  '  col = mix(vec3(l), col, uSat);',
+  '  col += uFlashCol * uFlash;',
+  // IMPACT FRAME: for one to three rendered frames the whole picture collapses
+  // to two flat inks. no gradients, no shading — the thing animators cut to for
+  // a single frame so your eye reads the hit before it reads the picture.
+  '  if(uImpact > 0.5){',
+  '    float li = dot(col, vec3(0.299,0.587,0.114));',
+  '    float e = smoothstep(0.30, 0.46, li);',
+  '    col = mix(uImpB, uImpA, step(0.5, e));',
+  '  }',
+  '  col *= 1.0 - 0.05*step(0.5, fract(gl_FragCoord.y*0.5));',
+  '  col *= smoothstep(1.05, 0.28, r);',
+  '  gl_FragColor = vec4(col, 1.0);',
+  '}'].join('\n')
+});
+postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2), POST));
+
+// ============================================================ arena
+function canvasTex(){
+  const s=512, cv=document.createElement('canvas'); cv.width=cv.height=s;
+  const x=cv.getContext('2d');
+  x.fillStyle='#14336B'; x.fillRect(0,0,s,s);
+  for(let i=0;i<70;i++){
+    x.strokeStyle='rgba(255,246,227,'+(0.02+Math.random()*0.05).toFixed(3)+')';
+    x.lineWidth=1+Math.random()*7; x.beginPath();
+    const px=Math.random()*s, py=Math.random()*s;
+    x.moveTo(px,py); x.lineTo(px+(Math.random()-.5)*180, py+(Math.random()-.5)*180); x.stroke();
+  }
+  x.strokeStyle='rgba(255,45,85,.5)'; x.lineWidth=10;
+  x.beginPath(); x.arc(s/2,s/2,150,0,6.283); x.stroke();
+  x.strokeStyle='rgba(255,224,61,.32)'; x.lineWidth=3;
+  x.beginPath(); x.arc(s/2,s/2,176,0,6.283); x.stroke();
+  const t=new THREE.CanvasTexture(cv);
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return t;
+}
+const ring = new THREE.Mesh(new THREE.PlaneGeometry(9,9),
+  new THREE.MeshStandardMaterial({ map:canvasTex(), roughness:.92 }));
+ring.rotation.x = -Math.PI/2; ring.receiveShadow = true; scene.add(ring);
+
+const ropeCols = [0xFF2D55, 0xFFF6E3, 0x25E5FF, 0xFF2D55];
+for(let s=0;s<4;s++){
+  const holder = new THREE.Group();
+  holder.rotation.y = s*Math.PI/2;
+  for(let i=0;i<4;i++){
+    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,8.6,7),
+      new THREE.MeshStandardMaterial({ color:ropeCols[i], roughness:.5,
+        emissive:ropeCols[i], emissiveIntensity:.16 }));
+    rope.rotation.z = Math.PI/2;
+    rope.position.set(0, 0.42+i*0.42, -4.3);
+    holder.add(rope);
+  }
+  scene.add(holder);
+}
+for(let i=0;i<4;i++){
+  const p = new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.13,2.0,10),
+    new THREE.MeshStandardMaterial({ color:0x2A1830, roughness:.6, flatShading:true }));
+  p.position.set((i<2?-1:1)*4.3, 1.0, (i%2?-1:1)*4.3);
+  p.castShadow = true; scene.add(p);
+}
+const apron = new THREE.Mesh(new THREE.CylinderGeometry(6.4, 6.4, 0.9, 4, 1, true),
+  new THREE.MeshStandardMaterial({ color:0x140A20, roughness:.9, side:THREE.DoubleSide }));
+apron.rotation.y = Math.PI/4; apron.position.y = -0.45; scene.add(apron);
+
+const crowd = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5,0.9,0.5),
+  new THREE.MeshStandardMaterial({ color:0x150E22, roughness:1 }), 260);
+{
+  const m = new THREE.Object3D(); let i = 0;
+  for(let rI=0; rI<5 && i<260; rI++){
+    const rad = 8 + rI*1.7, n = 40 + rI*4;
+    for(let j=0; j<n && i<260; j++){
+      const a = (j/n)*Math.PI*2 + rI*0.2;
+      m.position.set(Math.cos(a)*rad + (Math.random()-.5), -0.2 + rI*0.55, Math.sin(a)*rad + (Math.random()-.5));
+      m.rotation.set(0, -a + Math.PI/2, 0);
+      m.updateMatrix(); crowd.setMatrixAt(i++, m.matrix);
+    }
+  }
+  crowd.count = i;
+}
+scene.add(crowd);
+
+// crowd camera flashes
+function flashTex(){
+  const s=64, cv=document.createElement('canvas'); cv.width=cv.height=s;
+  const x=cv.getContext('2d');
+  const g=x.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
+  g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(.25,'rgba(255,250,230,.7)');
+  g.addColorStop(1,'rgba(255,240,200,0)');
+  x.fillStyle=g; x.fillRect(0,0,s,s);
+  return new THREE.CanvasTexture(cv);
+}
+const FLASH_TEX = flashTex();
+const bulbs = [];
+for(let i=0;i<90;i++){
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:FLASH_TEX, color:0xFFF6E3,
+    blending:THREE.AdditiveBlending, transparent:true, opacity:0, depthWrite:false, fog:false }));
+  const a = Math.random()*Math.PI*2, rad = 8.5 + Math.random()*7;
+  sp.position.set(Math.cos(a)*rad, 0.3 + Math.random()*3.4, Math.sin(a)*rad);
+  sp.scale.setScalar(0); scene.add(sp);
+  bulbs.push({ sp:sp, life:0 });
+}
+function popBulb(){ const b = bulbs[(Math.random()*bulbs.length)|0]; if(b.life <= 0) b.life = 1; }
+function bulbStorm(n){ for(let i=0;i<n;i++) setTimeout(popBulb, Math.random()*260); }
+
+// ============================================================ lights
+scene.add(new THREE.AmbientLight(0x40306A, 0.55));
+const key = new THREE.SpotLight(0xFFF6E3, 2.2, 32, 0.80, 0.45, 1.1);
+key.position.set(0.4, 9, 0.4); key.target.position.set(0,1,0);
+key.castShadow = true; key.shadow.mapSize.set(1024,1024);
+key.shadow.camera.near = 3; key.shadow.camera.far = 19; key.shadow.bias = -0.0014;
+scene.add(key); scene.add(key.target);
+const rimA = new THREE.PointLight(K.violet, 2.4, 14); rimA.position.set(-3.8, 2.6, -3.4); scene.add(rimA);
+const rimB = new THREE.PointLight(K.cyan,   1.9, 14); rimB.position.set( 4.0, 2.2, -0.6); scene.add(rimB);
+const rimC = new THREE.PointLight(K.blood,  1.4, 12); rimC.position.set( 0.0, 1.4,  3.8); scene.add(rimC);
+const shaft = new THREE.Mesh(new THREE.ConeGeometry(3.2, 8.4, 22, 1, true),
+  new THREE.MeshBasicMaterial({ color:0xFFF0D0, transparent:true, opacity:0.045,
+    blending:THREE.AdditiveBlending, side:THREE.DoubleSide, depthWrite:false }));
+shaft.position.set(0.2, 5.0, 0.2); scene.add(shaft);
+
+// reach ring under the player
+const reachRing = new THREE.Mesh(new THREE.RingGeometry(1.86, 1.95, 48),
+  new THREE.MeshBasicMaterial({ color:K.bone, transparent:true, opacity:0.07,
+    blending:THREE.AdditiveBlending, side:THREE.DoubleSide, depthWrite:false }));
+reachRing.rotation.x = -Math.PI/2; reachRing.position.y = 0.015; scene.add(reachRing);
+
+// ============================================================ fighters
+const UP = new V3(0,1,0);
+// stance: lead foot forward-left, rear foot back-right (fighter faces -z).
+// a southpaw mirrors it — lead foot forward-right — which is why lefties read wrong.
+const STANCE = [ {x:-0.24, z:-0.26}, {x:0.27, z:0.30} ];
+function stanceOf(f, i){
+  const s = STANCE[i];
+  return f.mirror ? { x:-s.x, z:s.z } : s;
+}
+const THIGH = 0.44, SHIN = 0.44, HIP_Y = 0.80;
+const ARM_U = 0.40, ARM_F = 0.44;
+
+// one two-bone IK solver, used by both the legs and the arms.
+// bendDir says which way the joint breaks: knees forward, elbows down and out.
+const _tb = new V3(), _dirN = new V3(), _bnd = new V3(), _jnt = new V3();
+function solveTwoBone(b1, b2, joint, root, tip, L1, L2, bendDir){
+  _tb.subVectors(tip, root);
+  let d = _tb.length();
+  if(d < 1e-4){ _tb.set(0,-1,0); d = 1e-4; }
+  _dirN.copy(_tb).divideScalar(d);
+  if(d >= L1 + L2){
+    // past full extension the arm is a straight line with no visible bend, so
+    // rather than snapping short we let it reach and share the stretch across
+    // both bones — the elbow stays at its proper proportion along the limb.
+    _jnt.copy(root).addScaledVector(_dirN, d * (L1/(L1+L2)));
+  } else {
+    _bnd.copy(bendDir);
+    _bnd.addScaledVector(_dirN, -_bnd.dot(_dirN));      // orthogonalise
+    if(_bnd.lengthSq() < 1e-5){ _bnd.set(0,-1,0).addScaledVector(_dirN, _dirN.y); }
+    _bnd.normalize();
+    const a = (L1*L1 - L2*L2 + d*d) / (2*d);
+    const h = Math.sqrt(Math.max(0, L1*L1 - a*a));
+    _jnt.copy(root).addScaledVector(_dirN, a).addScaledVector(_bnd, h);
+  }
+  orient(b1, root, _jnt);
+  orient(b2, _jnt, tip);
+  if(joint) joint.position.copy(_jnt);
+}
+
+function bone(r1,r2,mat){
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,1,8), mat);
+  m.castShadow = true; return m;
+}
+// ============================================================ squish
+// Flesh gives. Each dentable mesh carries a dent centre, an inward direction
+// and an amount, pushed into the vertex shader. These materials are flat
+// shaded, and three derives flat normals from screen-space derivatives in the
+// fragment shader — so a dented surface lights itself correctly for free.
+// SQUISH, dialled to the stop. headMax is bounded by the head's own radius
+// (0.235): dent it deeper than that and the face turns inside out, so 0.19
+// caves it to ~19% of its depth and stops just short of the far wall.
+// Was: headMax 0.095, gloveMax 0.075, radius 0.17, gloveR 0.13, stiff 820,
+// damp 24, rebound 0.45 — that's the grounded setting if you want it back.
+const SQUISH = { headMax:0.19, gloveMax:0.15, radius:0.30, gloveR:0.24,
+                 stiff:380, damp:9, rebound:0.70 };
+function dentify(mat, radius){
+  const u = {
+    uDentP:{ value:new V3(0,99,0) },
+    uDentN:{ value:new V3(0,0,1) },
+    uDentA:{ value:0 },
+    uDentR:{ value:radius || SQUISH.radius }
+  };
+  mat.userData.u = u;
+  mat.onBeforeCompile = function(sh){
+    sh.uniforms.uDentP = u.uDentP; sh.uniforms.uDentN = u.uDentN;
+    sh.uniforms.uDentA = u.uDentA; sh.uniforms.uDentR = u.uDentR;
+    sh.vertexShader =
+      'uniform vec3 uDentP; uniform vec3 uDentN; uniform float uDentA; uniform float uDentR;\n'
+      + sh.vertexShader.replace('#include <begin_vertex>',
+        '#include <begin_vertex>\n' +
+        'float dD = distance(transformed, uDentP);\n' +
+        'float dW = smoothstep(uDentR, 0.0, dD);\n' +
+        'dW = dW*dW*(3.0-2.0*dW);\n' +              // soften the shoulder of the dent
+        'transformed += uDentN * (uDentA * dW);\n');
+  };
+  mat.customProgramCacheKey = function(){ return 'dent'; };
+  return mat;
+}
+function deform(max){ return { a:0, v:0, t:0, max:max, p:new V3(0,99,0), n:new V3(0,0,1) }; }
+function springDeform(d, raw){
+  // hard-driven while a glove is on it, then released to wobble
+  d.v += ((d.t - d.a)*SQUISH.stiff - d.v*SQUISH.damp) * raw;
+  d.a += d.v * raw;
+  d.a = clamp(d.a, -d.max*SQUISH.rebound, d.max);   // negative overshoot = it bulges back out
+  d.t = 0;                                // resolveContacts re-asserts this each frame
+}
+function applyDeform(mesh, d, scale){
+  const u = mesh.material.userData.u;
+  if(!u) return;
+  u.uDentA.value = d.a / (scale || 1);
+  u.uDentP.value.copy(d.p);
+  u.uDentN.value.copy(d.n);
+}
+
+function makeFighter(o){
+  const g = new THREE.Group();
+  const skin  = new THREE.MeshStandardMaterial({ color:o.skin, roughness:.68, flatShading:true });
+  const trunk = new THREE.MeshStandardMaterial({ color:o.trunk, roughness:.5, flatShading:true });
+  const gl    = new THREE.MeshStandardMaterial({ color:o.glove, roughness:.24, metalness:.2, flatShading:true });
+  const boot  = new THREE.MeshStandardMaterial({ color:o.boot, roughness:.45, flatShading:true });
+
+  const body = new THREE.Group(); g.add(body);   // everything above the hips
+
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.40,0.30,0.86,9), skin);
+  torso.position.y = 1.24; torso.castShadow = true; body.add(torso);
+  const hips = new THREE.Mesh(new THREE.CylinderGeometry(0.30,0.31,0.34,9), trunk);
+  hips.position.y = 0.76; hips.castShadow = true; body.add(hips);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.235,18,14), dentify(skin.clone()));
+  head.position.set(0,1.80,-0.02); head.castShadow = true; body.add(head);
+  const brow = new THREE.Mesh(new THREE.BoxGeometry(0.34,0.07,0.1),
+    new THREE.MeshStandardMaterial({color:0x0E0812,roughness:.9}));
+  brow.position.set(0,1.85,-0.22); body.add(brow);
+  const shoulders = [];
+  for(const sx of [-1,1]){
+    const sh = new THREE.Mesh(new THREE.SphereGeometry(0.16,9,8), skin);
+    sh.position.set(sx*0.40, 1.52, 0); sh.castShadow = true; body.add(sh);
+    shoulders.push(sh);
+  }
+
+  // arms: upper + forearm with a real elbow between them
+  function arm(){
+    const up = bone(0.115,0.10, skin);
+    const fore = bone(0.10,0.125, skin);
+    const elb = new THREE.Mesh(new THREE.SphereGeometry(0.095,8,7), skin);
+    elb.castShadow = true;
+    g.add(up); g.add(fore); g.add(elb);
+    return { up:up, fore:fore, elb:elb, bias:new V3() };
+  }
+  const armL = arm(), armR = arm();
+  function glove(){
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.185,16,12), dentify(gl.clone(), SQUISH.gloveR));
+    m.scale.set(1,1,1.22); m.castShadow = true; g.add(m); return m;
+  }
+  const gloveL = glove(), gloveR = glove();
+
+  // legs: thigh + shin + boot per side, driven by 2-bone IK from planted feet
+  const legs = [];
+  for(let i=0;i<2;i++){
+    const th = bone(0.14,0.115, skin), sh = bone(0.105,0.09, skin);
+    const bt = new THREE.Mesh(new THREE.BoxGeometry(0.20,0.11,0.34), boot);
+    bt.castShadow = true;
+    g.add(th); g.add(sh); g.add(bt);
+    legs.push({ thigh:th, shin:sh, boot:bt, kneeLocal:new V3(),
+      hip:new V3((i===0?-1:1)*0.15, HIP_Y, 0),
+      world:new V3(), from:new V3(), to:new V3(),
+      stepT:1, lift:0 });
+  }
+
+  return {
+    group:g, body:body, torso:torso, head:head,
+    armL:armL, armR:armR, gloveL:gloveL, gloveR:gloveR, legs:legs, shoulders:shoulders,
+    hips:hips,
+    // world-space collision shapes, rebuilt every frame
+    col:{ head:{ c:new V3(), r:0.235 },
+          torso:{ a:new V3(), b:new V3(), r:0.34 },
+          gL:{ c:new V3(), r:0.195 }, gR:{ c:new V3(), r:0.195 } },
+    rag:null,
+    shL:new V3(-0.40,1.52,0), shR:new V3(0.40,1.52,0),
+    guardL:new V3(-0.32,1.44,-0.42), guardR:new V3(0.34,1.42,-0.40),
+    pos:new V3(), yaw:0, punch:null, stagger:0, hurt:0, dead:false,
+    stepCool:0, sway:0, mirror:false, spec:null,
+    dHead:deform(SQUISH.headMax), dGL:deform(SQUISH.gloveMax), dGR:deform(SQUISH.gloveMax),
+    mats:{ skin:skin, gl:gl, trunk:trunk, boot:boot, brow:brow.material,
+           headMat:head.material, gloveMats:[gloveL.material, gloveR.material] }
+  };
+}
+// which physical hand throws a given move — flipped for a southpaw
+function sideOf(f, mv){ return f.mirror ? (mv.side === 'L' ? 'R' : 'L') : mv.side; }
+const P = makeFighter({ skin:0xC98B63, trunk:0x1B1030, glove:0xFF2D55, boot:0x2A0E18 });
+const F = makeFighter({ skin:0x8E6A50, trunk:0x0F2A55, glove:0x25E5FF, boot:0x0A1C34 });
+F.torso.scale.set(1.14,1.06,1.14);
+scene.add(P.group); scene.add(F.group);
+
+function orient(mesh, a, b){
+  mesh.position.copy(a).add(b).multiplyScalar(0.5);
+  const d = new V3().subVectors(b,a);
+  const len = Math.max(d.length(), 0.01);
+  mesh.scale.set(1, len, 1);
+  mesh.quaternion.setFromUnitVectors(UP, d.normalize());
+}
+// local <-> world on the ground plane (fighters only ever yaw)
+function toWorld(f, lx, lz, out){
+  const c = Math.cos(f.yaw), s = Math.sin(f.yaw);
+  out.set(f.pos.x + lx*c + lz*s, 0, f.pos.z + (-lx*s + lz*c));
+  return out;
+}
+function toLocal(f, w, out){
+  const dx = w.x - f.pos.x, dz = w.z - f.pos.z;
+  const c = Math.cos(f.yaw), s = Math.sin(f.yaw);
+  out.set(dx*c - dz*s, w.y, dx*s + dz*c);
+  return out;
+}
+
+// ---- arms: elbows break down and away from the ribs ----
+const _shp = new V3(), _abend = new V3();
+function solveArm(f, side){
+  const A = side === 'L' ? f.armL : f.armR;
+  const glove = side === 'L' ? f.gloveL : f.gloveR;
+  const sign = side === 'L' ? -1 : 1;
+  // the shoulder rides the torso — when he turns his body into a cross, the
+  // shoulder comes with it and the punch gains the reach it should
+  _shp.copy(side === 'L' ? f.shL : f.shR).applyMatrix4(f.body.matrix);
+  // a hook throws the elbow wide; everything else keeps it tucked
+  const hooking = f.punch && f.punch.mv.arc === 'hook' && sideOf(f, f.punch.mv) === side;
+  _abend.set(sign * (hooking ? 1.6 : 0.5), hooking ? -0.25 : -1, hooking ? 0.15 : 0.4);
+  _abend.add(A.bias);      // whatever avoidBones learned about his skull last frame
+  solveTwoBone(A.up, A.fore, A.elb, _shp, glove.position, ARM_U, ARM_F, _abend);
+}
+
+// ---- collision ---------------------------------------------------------
+// The body is a real collider set now, not just a head: a head sphere, a torso
+// capsule, and both gloves. Punching arms are capsules too, because a hook's
+// forearm will happily saw through a skull that a glove-only test declares
+// clear. Nothing here is allowed to end a frame inside anything else.
+const _s1 = new V3(), _s2 = new V3(), _ab = new V3(), _ap = new V3();
+function closestOnSeg(a, b, p, out){
+  _ab.subVectors(b, a); _ap.subVectors(p, a);
+  const len2 = _ab.lengthSq();
+  const t = len2 < 1e-9 ? 0 : clamp(_ap.dot(_ab)/len2, 0, 1);
+  return out.copy(a).addScaledVector(_ab, t);
+}
+function updateColliders(f){
+  const s = f.group.scale.x || 1;
+  f.head.getWorldPosition(f.col.head.c); f.col.head.r = 0.235*s;
+  f.gloveL.getWorldPosition(f.col.gL.c); f.col.gL.r = 0.195*s;
+  f.gloveR.getWorldPosition(f.col.gR.c); f.col.gR.r = 0.195*s;
+  // torso capsule runs hips -> collarbone through the actual posed body
+  f.col.torso.a.set(0, 0.86, 0); f.body.localToWorld(f.col.torso.a);
+  f.col.torso.b.set(0, 1.62, 0); f.body.localToWorld(f.col.torso.b);
+  f.col.torso.r = 0.34*s;
+}
+
+// push a sphere out of another sphere. returns penetration depth.
+function pushOutSphere(c, r, oc, orr, outNormal){
+  const d = c.distanceTo(oc);
+  const pen = (r + orr) - d;
+  if(pen <= 0) return 0;
+  if(d < 1e-6) outNormal.set(0,1,0); else outNormal.subVectors(c, oc).divideScalar(d);
+  return pen;
+}
+// push a sphere out of a capsule.
+function pushOutCapsule(c, r, cap, outNormal){
+  closestOnSeg(cap.a, cap.b, c, _s1);
+  return pushOutSphere(c, r, _s1, cap.r, outNormal);
+}
+
+const _cg = new V3(), _cax = new V3(), _cq = new THREE.Quaternion(), _cp = new V3();
+// resolve one glove against a defender: head, torso and guard, deepest first
+function resolveGlove(att, glove, dGlove, def, isSelf){
+  const gScale = att.group.scale.x || 1;
+  const gR = 0.195 * gScale;
+  glove.getWorldPosition(_cg);
+
+  const cands = [];
+  cands.push({ kind:'head', c:def.col.head.c, r:def.col.head.r, d:def.dHead, mesh:def.head });
+  cands.push({ kind:'torso', cap:def.col.torso });
+  if(!isSelf){
+    cands.push({ kind:'g', c:def.col.gL.c, r:def.col.gL.r, d:def.dGL, mesh:def.gloveL });
+    cands.push({ kind:'g', c:def.col.gR.c, r:def.col.gR.r, d:def.dGR, mesh:def.gloveR });
+  }
+  let best = null, bestPen = 0;
+  for(let i=0;i<cands.length;i++){
+    const t = cands[i];
+    const pen = t.kind === 'torso'
+      ? pushOutCapsule(_cg, gR, t.cap, _s2)
+      : pushOutSphere(_cg, gR, t.c, t.r, _s2);
+    if(pen > bestPen){ bestPen = pen; best = t; _cax.copy(_s2); }
+  }
+  if(!best) return;
+
+  // how much give: a jab barely marks him, an uppercut caves his face in
+  let power = 0.55;
+  if(att.punch && sideOf(att, att.punch.mv) === (glove === att.gloveL ? 'L' : 'R')){
+    power = clamp(0.45 + att.punch.mv.shake*0.6, 0.4, 1);
+  }
+  // only flesh with a dent rig gives; ribs and your own body just stop you
+  const soft = !!best.d && !isSelf;
+  const giveA = soft ? best.d.max*power : 0;
+  const giveB = soft ? dGlove.max*power*0.8 : 0;
+  const give = giveA + giveB;
+
+  const dent = Math.min(bestPen, give);
+  const push = bestPen - dent;               // whatever the flesh can't absorb
+  if(push > 0){
+    _cp.copy(_cg).addScaledVector(_cax, push);
+    att.group.worldToLocal(_cp);
+    glove.position.copy(_cp);
+  }
+  if(!soft || give <= 1e-6) return;
+
+  const split = giveA/give;
+  best.d.t = Math.max(best.d.t, dent*split);
+  _cq.copy(best.mesh.getWorldQuaternion(_cq)).invert();
+  best.d.n.copy(_cax).applyQuaternion(_cq).normalize();
+  best.d.p.copy(best.d.n).multiplyScalar(best.r / (def.group.scale.x || 1));
+  best.d.n.negate();                          // dent pushes inward
+
+  dGlove.t = Math.max(dGlove.t, dent*(1-split));
+  _cq.copy(glove.getWorldQuaternion(_cq)).invert();
+  dGlove.n.copy(_cax).applyQuaternion(_cq).normalize();
+  dGlove.p.copy(dGlove.n).multiplyScalar(-0.185);
+}
+
+// keep the arm BONES out of him too. a buried forearm can't be fixed by moving
+// the glove, so we steer the elbow instead: nudge the IK pole vector and
+// re-solve. the bias decays, so the arm returns to a natural carriage the
+// moment it's clear of him.
+const _bw = new V3(), _bn = new V3(), _bsh = new V3(), _be = new V3(),
+      _bg = new V3(), _bbest = new V3();
+function avoidBones(f, side, opp){
+  const A = side === 'L' ? f.armL : f.armR;
+  const glove = side === 'L' ? f.gloveL : f.gloveR;
+  A.bias.multiplyScalar(0.80);                      // release when clear
+  if(A.bias.lengthSq() < 1e-6) A.bias.set(0,0,0);
+
+  A.elb.getWorldPosition(_be);
+  glove.getWorldPosition(_bg);
+  _bsh.copy(side === 'L' ? f.shL : f.shR).applyMatrix4(f.body.matrixWorld);
+
+  const r = 0.115 * (f.group.scale.x || 1);
+  let worst = 0;
+  _bbest.set(0,0,0);
+  // sample along upper arm then forearm; the tip is the glove's own problem
+  for(let i=0;i<8;i++){
+    const t = i/8;
+    if(t <= 0.5) _bw.lerpVectors(_bsh, _be, t*2);
+    else _bw.lerpVectors(_be, _bg, (t-0.5)*2);
+    let pen = pushOutSphere(_bw, r, opp.col.head.c, opp.col.head.r, _bn);
+    if(pen > worst){ worst = pen; _bbest.copy(_bn); }
+    pen = pushOutCapsule(_bw, r, opp.col.torso, _bn);
+    if(pen > worst){ worst = pen; _bbest.copy(_bn); }
+  }
+  if(worst > 0.001){
+    _bn.copy(_bbest);
+    _cq.copy(f.group.getWorldQuaternion(_cq)).invert();
+    _bn.applyQuaternion(_cq).normalize();
+    A.bias.addScaledVector(_bn, Math.min(worst, 0.25) * 3.0);
+    if(A.bias.length() > 2.5) A.bias.setLength(2.5);
+    solveArm(f, side);                              // re-solve with the new pole
+  }
+}
+
+// nothing gets to go under the canvas
+function floorClamp(f){
+  const s = f.group.scale.x || 1;
+  [[f.gloveL, 0.195], [f.gloveR, 0.195], [f.armL.elb, 0.095], [f.armR.elb, 0.095]]
+    .forEach(function(pair){
+      const m = pair[0], r = pair[1]*s;
+      m.getWorldPosition(_cg);
+      if(_cg.y < r){
+        _cg.y = r;
+        f.group.worldToLocal(_cg);
+        m.position.copy(_cg);
+      }
+    });
+}
+
+function resolveContacts(){
+  P.group.updateMatrixWorld(true); F.group.updateMatrixWorld(true);
+  updateColliders(P); updateColliders(F);
+  // two relaxation passes: resolving one contact can create another
+  for(let it=0; it<2; it++){
+    if(!P.rag){
+      resolveGlove(P, P.gloveL, P.dGL, F, false);
+      resolveGlove(P, P.gloveR, P.dGR, F, false);
+      resolveGlove(P, P.gloveL, P.dGL, P, true);    // and out of his own chest and chin
+      resolveGlove(P, P.gloveR, P.dGR, P, true);
+    }
+    if(!F.rag){
+      resolveGlove(F, F.gloveL, F.dGL, P, false);
+      resolveGlove(F, F.gloveR, F.dGR, P, false);
+      resolveGlove(F, F.gloveL, F.dGL, F, true);
+      resolveGlove(F, F.gloveR, F.dGR, F, true);
+    }
+    P.group.updateMatrixWorld(true); F.group.updateMatrixWorld(true);
+    updateColliders(P); updateColliders(F);
+  }
+  if(!P.rag) floorClamp(P);
+  if(!F.rag) floorClamp(F);
+}
+function squishTick(raw){
+  [P, F].forEach(function(f){
+    const s = f.group.scale.x || 1;
+    springDeform(f.dHead, raw); springDeform(f.dGL, raw); springDeform(f.dGR, raw);
+    applyDeform(f.head, f.dHead, s);
+    applyDeform(f.gloveL, f.dGL, s);
+    applyDeform(f.gloveR, f.dGR, s);
+  });
+}
+
+// ============================================================ ragdoll
+// When he's out, he's OUT — no animation left. A Verlet particle skeleton
+// takes the body over: 14 points, distance constraints for bones, gravity, a
+// floor, and the other man to fall against. It snapshots the exact pose at the
+// instant of the knockout, so he goes limp from wherever he happened to be.
+const _koDir = new V3();
+const RAG = { grav:-19, damp:0.986, iters:9, friction:0.72 };
+function ragPoint(p, r){ return { p:p.clone(), o:p.clone(), r:r, pin:0 }; }
+function buildRagdoll(f){
+  f.group.updateMatrixWorld(true);
+  const s = f.group.scale.x || 1;
+  const w = function(mesh){ return mesh.getWorldPosition(new V3()); };
+  const shW = function(side){
+    return new V3().copy(side === 'L' ? f.shL : f.shR).applyMatrix4(f.body.matrixWorld);
+  };
+  const hipW = function(side){
+    return new V3().copy(f.legs[side === 'L' ? 0 : 1].hip).applyMatrix4(f.group.matrixWorld);
+  };
+  const P_ = {
+    head:  ragPoint(w(f.head), 0.235*s),
+    chest: ragPoint(new V3().copy(f.col.torso.b), 0.30*s),
+    hipC:  ragPoint(new V3().copy(f.col.torso.a), 0.26*s),
+    shL:   ragPoint(shW('L'), 0.15*s), shR: ragPoint(shW('R'), 0.15*s),
+    hipL:  ragPoint(hipW('L'), 0.14*s), hipR: ragPoint(hipW('R'), 0.14*s),
+    elbL:  ragPoint(w(f.armL.elb), 0.10*s), elbR: ragPoint(w(f.armR.elb), 0.10*s),
+    gloL:  ragPoint(w(f.gloveL), 0.19*s),   gloR: ragPoint(w(f.gloveR), 0.19*s),
+    kneL:  ragPoint(new V3().copy(f.legs[0].kneeLocal).applyMatrix4(f.group.matrixWorld), 0.11*s),
+    kneR:  ragPoint(new V3().copy(f.legs[1].kneeLocal).applyMatrix4(f.group.matrixWorld), 0.11*s),
+    // feet are ANKLE points: the live rig puts the boot centre 0.055 above the
+    // sole, so a particle sitting on the sole with a fat radius would kick the
+    // boots 10cm into the air the instant he goes limp
+    fooL:  ragPoint(new V3().copy(f.legs[0].world).setY(f.legs[0].world.y + 0.055*s), 0.06*s),
+    fooR:  ragPoint(new V3().copy(f.legs[1].world).setY(f.legs[1].world.y + 0.055*s), 0.06*s)
+  };
+  // rest lengths are measured from the pose he was actually in, so scale,
+  // stance and stride all come along for free
+  const C = [];
+  const link = function(a, b, stiff){
+    C.push({ a:P_[a], b:P_[b], len:P_[a].p.distanceTo(P_[b].p), k:stiff===undefined?1:stiff });
+  };
+  link('head','chest',0.9); link('head','shL',0.55); link('head','shR',0.55);
+  link('chest','shL'); link('chest','shR'); link('shL','shR',0.9);
+  link('chest','hipC',0.95); link('hipC','hipL'); link('hipC','hipR'); link('hipL','hipR',0.9);
+  link('shL','hipL',0.7); link('shR','hipR',0.7);
+  link('shL','hipR',0.5); link('shR','hipL',0.5);       // cross braces
+  link('shL','elbL'); link('elbL','gloL');
+  link('shR','elbR'); link('elbR','gloR');
+  link('hipL','kneL'); link('kneL','fooL');
+  link('hipR','kneR'); link('kneR','fooR');
+  link('chest','elbL',0.12); link('chest','elbR',0.12); // keep arms from folding through the chest
+  f.rag = { pts:P_, list:Object.keys(P_).map(function(k){ return P_[k]; }), cons:C, t:0 };
+  return f.rag;
+}
+function ragImpulse(f, dir, power){
+  const R = f.rag; if(!R) return;
+  const hit = [['head',1.0],['chest',0.55],['shL',0.4],['shR',0.4]];
+  hit.forEach(function(h){
+    const pt = R.pts[h[0]];
+    pt.o.addScaledVector(dir, -power*h[1]*0.045);       // Verlet: shift the old pos
+    pt.o.y += power*h[1]*0.012;
+  });
+}
+const _rv = new V3(), _rn = new V3();
+const RAG_STEP = 1/120;
+function ragTick(f, opp, dt){
+  const R = f.rag; if(!R) return;
+  // Verlet assumes a constant step. slow-mo changes dt by 4x, which would read
+  // as a velocity spike and fire him across the arena — so accumulate instead.
+  R.acc = (R.acc || 0) + dt;
+  let guard = 0;
+  while(R.acc >= RAG_STEP && guard++ < 8){ R.acc -= RAG_STEP; ragStep(f, opp, RAG_STEP); }
+}
+function ragStep(f, opp, dt){
+  const R = f.rag;
+  R.t += dt;
+  const list = R.list;
+  // integrate
+  for(let i=0;i<list.length;i++){
+    const q = list[i];
+    _rv.subVectors(q.p, q.o).multiplyScalar(RAG.damp);
+    q.o.copy(q.p);
+    q.p.add(_rv);
+    q.p.y += RAG.grav * dt * dt;
+  }
+  // satisfy
+  for(let it=0; it<RAG.iters; it++){
+    for(let i=0;i<R.cons.length;i++){
+      const c = R.cons[i];
+      _rv.subVectors(c.b.p, c.a.p);
+      const d = _rv.length();
+      if(d < 1e-6) continue;
+      const diff = (d - c.len)/d * 0.5 * c.k;
+      c.a.p.addScaledVector(_rv, diff);
+      c.b.p.addScaledVector(_rv, -diff);
+    }
+    // floor + ropes + the man still standing
+    for(let i=0;i<list.length;i++){
+      const q = list[i];
+      if(q.p.y < q.r){
+        q.p.y = q.r;
+        // scrub sideways speed off against the canvas
+        q.o.x += (q.p.x - q.o.x) * RAG.friction;
+        q.o.z += (q.p.z - q.o.z) * RAG.friction;
+      }
+      q.p.x = clamp(q.p.x, -4.15, 4.15);
+      q.p.z = clamp(q.p.z, -4.15, 4.15);
+      if(opp && !opp.dead){
+        const pen = pushOutCapsule(q.p, q.r, opp.col.torso, _rn);
+        if(pen > 0) q.p.addScaledVector(_rn, pen);
+      }
+    }
+  }
+}
+// drive the meshes from the particles
+const _lw = new V3(), _lw2 = new V3(), _lw3 = new V3();
+function ragApply(f){
+  const R = f.rag; if(!R) return;
+  const P_ = R.pts;
+  f.group.updateMatrixWorld(true);
+  _invGroup.copy(f.group.matrixWorld).invert();
+  const g = function(v, out){ return out.copy(v).applyMatrix4(_invGroup); };
+
+  f.body.position.set(0,0,0); f.body.rotation.set(0,0,0); f.body.updateMatrix();
+  const hipMid = _lw.copy(P_.hipL.p).add(P_.hipR.p).multiplyScalar(0.5);
+  const shMid  = _lw2.copy(P_.shL.p).add(P_.shR.p).multiplyScalar(0.5);
+  const bulk = f.spec ? f.spec.bulk : 1;
+  orientLen(f.torso, g(hipMid, _rp1), g(shMid, _rp2), 0.86, bulk, bulk);
+  f.hips.position.copy(g(hipMid, _rp1));
+  f.hips.quaternion.copy(f.torso.quaternion);
+  f.head.position.copy(g(P_.head.p, _rp1));
+  f.head.quaternion.copy(f.torso.quaternion);
+  f.shoulders[0].position.copy(g(P_.shL.p, _rp1));
+  f.shoulders[1].position.copy(g(P_.shR.p, _rp1));
+
+  orient(f.armL.up,   g(P_.shL.p,_rp1), g(P_.elbL.p,_rp2));
+  orient(f.armL.fore, g(P_.elbL.p,_rp1), g(P_.gloL.p,_rp2));
+  f.armL.elb.position.copy(g(P_.elbL.p,_rp1));
+  f.gloveL.position.copy(g(P_.gloL.p,_rp1));
+  orient(f.armR.up,   g(P_.shR.p,_rp1), g(P_.elbR.p,_rp2));
+  orient(f.armR.fore, g(P_.elbR.p,_rp1), g(P_.gloR.p,_rp2));
+  f.armR.elb.position.copy(g(P_.elbR.p,_rp1));
+  f.gloveR.position.copy(g(P_.gloR.p,_rp1));
+
+  orient(f.legs[0].thigh, g(P_.hipL.p,_rp1), g(P_.kneL.p,_rp2));
+  orient(f.legs[0].shin,  g(P_.kneL.p,_rp1), g(P_.fooL.p,_rp2));
+  f.legs[0].boot.position.copy(g(P_.fooL.p,_rp1));
+  orient(f.legs[1].thigh, g(P_.hipR.p,_rp1), g(P_.kneR.p,_rp2));
+  orient(f.legs[1].shin,  g(P_.kneR.p,_rp1), g(P_.fooR.p,_rp2));
+  f.legs[1].boot.position.copy(g(P_.fooR.p,_rp1));
+}
+const _invGroup = new THREE.Matrix4();
+const _rp1 = new V3(), _rp2 = new V3();
+function orientLen(mesh, a, b, rest, sx, sz){
+  mesh.position.copy(a).add(b).multiplyScalar(0.5);
+  _rv.subVectors(b, a);
+  const len = Math.max(_rv.length(), 0.01);
+  mesh.scale.set(sx || 1, len/rest, sz || 1);   // keep his build; only stretch along the bone
+  mesh.quaternion.setFromUnitVectors(UP, _rv.normalize());
+}
+
+// ---- procedural footwork: feet plant, then shuffle to catch up ----
+const _ideal = new V3(), _fl = new V3(), _hip = new V3();
+const _kneeBend = new V3(0,0,-1);          // knees break forward
+function resetFeet(f){
+  for(let i=0;i<2;i++){
+    const st = stanceOf(f, i);
+    toWorld(f, st.x, st.z, f.legs[i].world);
+    f.legs[i].stepT = 1; f.legs[i].lift = 0;
+  }
+}
+function updateFeet(f, dt, moving){
+  f.stepCool -= dt;
+  let anyStepping = false;
+  for(let i=0;i<2;i++) if(f.legs[i].stepT < 1) anyStepping = true;
+
+  for(let i=0;i<2;i++){
+    const L = f.legs[i];
+    const st = stanceOf(f, i);
+    toWorld(f, st.x, st.z, _ideal);
+    if(L.stepT >= 1){
+      const off = Math.hypot(L.world.x - _ideal.x, L.world.z - _ideal.z);
+      // one foot at a time, and only once it's drifted far enough from stance
+      if(off > 0.22 && !anyStepping && f.stepCool <= 0 && !f.dead){
+        L.from.copy(L.world);
+        L.to.copy(_ideal);
+        // overshoot slightly in the direction of travel so the step leads the body
+        L.to.x += (_ideal.x - L.world.x) * 0.30;
+        L.to.z += (_ideal.z - L.world.z) * 0.30;
+        L.stepT = 0; f.stepCool = 0.05;
+        anyStepping = true;
+        sfxStep();
+      }
+    } else {
+      L.stepT = Math.min(1, L.stepT + dt / (moving ? 0.13 : 0.18));
+      const t = L.stepT;
+      L.world.lerpVectors(L.from, L.to, t*t*(3-2*t));
+      L.lift = Math.sin(t*Math.PI) * 0.085;
+      L.world.y = L.lift;
+      if(t >= 1){ L.lift = 0; L.world.y = 0; }
+    }
+  }
+}
+function solveLegs(f){
+  const bobY = f.body.position.y;
+  for(let i=0;i<2;i++){
+    const L = f.legs[i];
+    _hip.set(L.hip.x + f.body.position.x*0.5, L.hip.y + bobY, L.hip.z + f.body.position.z*0.55);
+    toLocal(f, L.world, _fl);
+    _fl.y = L.world.y + 0.055;                 // ankle sits above the sole
+    solveTwoBone(L.thigh, L.shin, null, _hip, _fl, THIGH, SHIN, _kneeBend);
+    L.kneeLocal.copy(_jnt);      // ragdoll needs the real knee to measure the thigh
+    L.boot.position.set(_fl.x, Math.max(0.055, L.world.y + 0.055), _fl.z + 0.05);
+    L.boot.rotation.set(-L.lift*2.2, 0, 0);
+  }
+}
+
+// ============================================================ FX pools
+const parts = [];
+{
+  const geo = new THREE.PlaneGeometry(0.09,0.09);
+  for(let i=0;i<160;i++){
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color:0xffffff,
+      blending:THREE.AdditiveBlending, transparent:true, depthWrite:false, fog:false,
+      side:THREE.DoubleSide }));
+    m.visible = false; scene.add(m);
+    parts.push({ m:m, v:new V3(), life:0, max:1, spin:0 });
+  }
+}
+function burst(pos, n, col, power){
+  let made = 0;
+  for(let i=0;i<parts.length && made<n;i++){
+    const p = parts[i];
+    if(p.life > 0) continue;
+    p.m.position.copy(pos);
+    p.v.set((Math.random()-.5)*power, (Math.random()-.2)*power*0.9, (Math.random()-.5)*power);
+    p.life = p.max = 0.28 + Math.random()*0.42;
+    p.spin = (Math.random()-.5)*6;
+    p.m.material.color.setHex(Math.random() < 0.4 ? 0xFFFFFF : col);
+    p.m.scale.setScalar(0.6 + Math.random()*1.5);
+    p.m.visible = true; made++;
+  }
+}
+const rings = [];
+{
+  const geo = new THREE.RingGeometry(0.35, 0.5, 26);
+  for(let i=0;i<8;i++){
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color:0xFFF6E3,
+      blending:THREE.AdditiveBlending, transparent:true, side:THREE.DoubleSide,
+      depthWrite:false, fog:false, opacity:0 }));
+    m.visible = false; scene.add(m);
+    rings.push({ m:m, life:0 });
+  }
+}
+function shockRing(pos, col, scale){
+  for(let i=0;i<rings.length;i++){
+    const r = rings[i];
+    if(r.life > 0) continue;
+    r.m.position.copy(pos); r.m.material.color.setHex(col);
+    r.m.userData.s = scale || 1; r.life = 1; r.m.visible = true; return;
+  }
+}
+
+// ---- impact polygons ---------------------------------------------------
+// The comic book thing. A jagged star at the point of contact, drawn over
+// everything with a fat ink outline behind it: black star, colour star, white
+// hot core. It pops on in two frames, holds dead still through the hit stop,
+// and then it's just gone. No fade — comics don't fade.
+function starGeo(spikes, inner, jitter){
+  const pts = [];
+  for(let i=0;i<spikes*2;i++){
+    const a = (i/(spikes*2))*Math.PI*2;
+    const r = (i%2 ? inner : 1) * (1 - Math.random()*jitter);
+    pts.push(new THREE.Vector2(Math.cos(a)*r, Math.sin(a)*r));
+  }
+  return new THREE.ShapeGeometry(new THREE.Shape(pts));
+}
+const POWS = [];
+for(let i=0;i<7;i++){
+  const g = new THREE.Group();
+  const geo = starGeo(8 + (i%4), 0.42, 0.28);
+  const flat = function(col, order){
+    return new THREE.MeshBasicMaterial({ color:col, transparent:true, depthTest:false,
+      depthWrite:false, side:THREE.DoubleSide, fog:false });
+  };
+  const ink  = new THREE.Mesh(geo, flat(0x0A0610));   // the outline is a bigger black one behind
+  const mid  = new THREE.Mesh(geo, flat(0xFF8A1E));
+  const core = new THREE.Mesh(starGeo(7 + (i%3), 0.5, 0.3), flat(0xFFF6E3));
+  ink.scale.setScalar(1.0); mid.scale.setScalar(0.86); core.scale.setScalar(0.40);
+  ink.renderOrder = 20; mid.renderOrder = 21; core.renderOrder = 22;
+  g.add(ink); g.add(mid); g.add(core);
+  g.visible = false; g.renderOrder = 20;
+  scene.add(g);
+  POWS.push({ g:g, ink:ink, mid:mid, core:core, life:0, max:1, size:1, spin:0 });
+}
+function popStar(pos, size, col, life){
+  for(let i=0;i<POWS.length;i++){
+    const s = POWS[i];
+    if(s.life > 0) continue;
+    s.g.position.copy(pos);
+    s.mid.material.color.setHex(col);
+    s.size = size;
+    s.spin = (Math.random()-0.5)*1.4;
+    s.life = s.max = life || 0.18;
+    s.g.visible = true;
+    return s;
+  }
+}
+function starTick(raw){
+  for(let i=0;i<POWS.length;i++){
+    const s = POWS[i];
+    if(s.life <= 0) continue;
+    s.life -= raw;
+    if(s.life <= 0){ s.g.visible = false; continue; }   // hard cut, no fade
+    const t = 1 - s.life/s.max;
+    const pop = t < 0.14 ? (t/0.14) : 1;                // two-frame snap to full
+    s.g.scale.setScalar(s.size * (0.35 + pop*0.65) * (1 + t*0.10));
+    s.g.quaternion.copy(camera.quaternion);
+    s.g.rotateZ(s.spin);
+  }
+}
+
+// ---- impact frames -----------------------------------------------------
+// Counted in RENDERED frames, not seconds, so they survive hit stop and
+// slow-mo exactly the way a hand-drawn one would.
+const IMP = { frames:0 };
+function impactFrames(n, a, b){
+  IMP.frames = Math.max(IMP.frames, n);
+  POST.uniforms.uImpA.value.setHex(a === undefined ? 0xFFE03D : a);
+  POST.uniforms.uImpB.value.setHex(b === undefined ? 0x0A0610 : b);
+}
+
+// ============================================================ audio
+let actx = null, noiseBuf = null;
+function audioInit(){
+  if(actx) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if(!AC) return;
+  actx = new AC();
+  noiseBuf = actx.createBuffer(1, (actx.sampleRate*0.6)|0, actx.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
+  crowdInit();
+}
+function noise(dur, vol, freq, q){
+  if(!actx) return;
+  const s = actx.createBufferSource(); s.buffer = noiseBuf;
+  const f = actx.createBiquadFilter(); f.type='bandpass'; f.frequency.value=freq; f.Q.value=q||1;
+  const g = actx.createGain();
+  g.gain.setValueAtTime(vol, actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+dur);
+  s.connect(f).connect(g).connect(actx.destination); s.start(); s.stop(actx.currentTime+dur);
+}
+function tone(f1, f2, dur, type, vol){
+  if(!actx) return;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type||'sine';
+  o.frequency.setValueAtTime(f1, actx.currentTime);
+  o.frequency.exponentialRampToValueAtTime(Math.max(f2,1), actx.currentTime+dur);
+  g.gain.setValueAtTime(vol||0.1, actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+dur);
+  o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+dur);
+}
+// ---- the crowd ----------------------------------------------------------
+// Ten thousand people are a filtered noise floor that breathes. Two layers:
+// a low murmur that's always there, and a mid "roar" band that opens up when
+// something happens. Both ride one excitement value.
+const CROWD = { level:0, spike:0, murmurG:null, roarG:null, roarF:null, on:false };
+function crowdBuffer(seconds){
+  const sr = actx.sampleRate, n = (sr*seconds)|0;
+  const buf = actx.createBuffer(2, n, sr);
+  for(let ch=0; ch<2; ch++){
+    const d = buf.getChannelData(ch);
+    let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+    for(let i=0;i<n;i++){
+      const w = Math.random()*2-1;
+      // Paul Kellet's pink filter — white noise is a hiss, pink is a crowd
+      b0 = 0.99886*b0 + w*0.0555179; b1 = 0.99332*b1 + w*0.0750759;
+      b2 = 0.96900*b2 + w*0.1538520; b3 = 0.86650*b3 + w*0.3104856;
+      b4 = 0.55000*b4 + w*0.5329522; b5 = -0.7616*b5 - w*0.0168980;
+      const pink = (b0+b1+b2+b3+b4+b5+b6+w*0.5362)*0.11;
+      b6 = w*0.115926;
+      // slow swells so it sounds like people, not a fan
+      const t = i/sr, ph = ch*1.7;
+      const wob = 0.72 + 0.28*Math.sin(t*0.55+ph) * Math.sin(t*0.21+ph*0.5);
+      d[i] = pink*wob;
+    }
+  }
+  return buf;
+}
+function crowdInit(){
+  if(!actx || CROWD.on) return;
+  const buf = crowdBuffer(6);
+  function layer(type, freq, q, gain){
+    const s = actx.createBufferSource();
+    s.buffer = buf; s.loop = true;
+    const f = actx.createBiquadFilter();
+    f.type = type; f.frequency.value = freq; if(q) f.Q.value = q;
+    const g = actx.createGain(); g.gain.value = gain;
+    s.connect(f).connect(g).connect(actx.destination);
+    s.start(Math.random()*3);   // offset so the layers don't phase-lock
+    return { g:g, f:f };
+  }
+  const murmur = layer('lowpass', 520, 0.7, 0);
+  const roar   = layer('bandpass', 900, 0.6, 0);
+  CROWD.murmurG = murmur.g; CROWD.roarG = roar.g; CROWD.roarF = roar.f;
+  CROWD.on = true;
+}
+function crowdBump(v){ CROWD.spike = Math.min(1.5, CROWD.spike + v); }
+function crowdTick(raw){
+  if(!CROWD.on) return;
+  CROWD.spike = Math.max(0, CROWD.spike - raw*0.85);
+  let base = 0.16;
+  if(state === S.FIGHT) base = 0.26 + Math.min(0.3, G.combo*0.02);
+  else if(state === S.REPLAY) base = 0.34;
+  else if(state === S.KO || state === S.DOWN) base = 0.75;
+  const want = Math.min(1.5, base + CROWD.spike);
+  CROWD.level += (want - CROWD.level) * Math.min(1, raw*(want > CROWD.level ? 7 : 1.6));
+  const L = CROWD.level;
+  // the buffer is already near full scale, so these stay small: a murmur you
+  // stop noticing, and a roar that only shows up when they have a reason.
+  CROWD.murmurG.gain.value = 0.06 + L*0.07;
+  CROWD.roarG.gain.value = Math.max(0, L-0.25) * 0.16;
+  CROWD.roarF.frequency.value = 780 + L*900;   // excited crowds get brighter
+}
+
+function sfxHit(p){ tone(180-p*40, 40, 0.16+p*0.1, 'sine', 0.16+p*0.1); noise(0.09+p*0.05, 0.14+p*0.08, 900+p*500, 1.2); }
+function sfxWhiff(){ noise(0.14, 0.05, 2600, 3); }
+function sfxBlock(){ noise(0.10, 0.11, 3400, 6); tone(420,180,0.1,'square',0.05); }
+function sfxRoar(v){ noise(0.9, v, 700, 0.4); }
+function sfxStep(){ noise(0.05, 0.02, 260, 1.4); }
+
+// ============================================================ state
+const S = { READY:0, FIGHT:1, KO:2, DOWN:3, REPLAY:4 };
+let state = S.READY;
+const G = {
+  foeHP:340, foeMax:340, meHP:100, meMax:100,
+  combo:0, comboT:0, maxCombo:0, meter:0, meterMax:100,
+  lastPunch:'', damage:0, landed:0, thrown:0, t0:0,
+  counter:0, invuln:0, weave:0, weaveDir:0, blocking:false,
+  hitstop:0, slow:0, trauma:0
+};
+const el = id => document.getElementById(id);
+const UI = {
+  foeFill:el('foeFill'), foeGhost:el('foeGhost'), meFill:el('meFill'),
+  superFill:el('superFill'), superBox:el('super'), rng:el('rng'), rngV:el('rngV'),
+  combo:el('combo'), comboN:el('comboN'), comboR:el('comboR'),
+  shout:el('shout'), dmg:el('dmg'), tint:el('tint'),
+  veil:el('veil'), go:el('go')
+};
+
+const MOVES = {
+  jab:   { dur:0.28, hit:0.42, dmg:6,  side:'L', shake:0.30, arc:'straight', range:1.95, label:'JAB',   col:0xFFF6E3 },
+  cross: { dur:0.38, hit:0.46, dmg:11, side:'R', shake:0.55, arc:'straight', range:1.84, label:'CROSS', col:0xFFE03D },
+  hook:  { dur:0.48, hit:0.50, dmg:15, side:'L', shake:0.85, arc:'hook',     range:1.66, label:'HOOK',  col:0xFF2D55 },
+  upper: { dur:0.56, hit:0.52, dmg:20, side:'R', shake:1.15, arc:'upper',    range:1.54, label:'UPPERCUT', col:0x8B3BFF, breaks:true }
+};
+const RANKS = [
+  {n:3,t:'NICE',c:'#FFF6E3'}, {n:6,t:'SHARP',c:'#25E5FF'}, {n:10,t:'BRUTAL',c:'#FFE03D'},
+  {n:15,t:'VICIOUS',c:'#FF2D55'}, {n:22,t:'UNREAL',c:'#8B3BFF'}
+];
+const gap = () => Math.hypot(F.pos.x - P.pos.x, F.pos.z - P.pos.z);
+
+// ============================================================ the gauntlet
+// every man on this card punishes a different bad habit.
+//   want    – the range he tries to hold
+//   aggr    – [min,max] seconds of thinking before he does something
+//   wind    – telegraph length; short wind = hard to read
+//   block   – odds he turtles instead of throwing
+//   flurry  – extra punches chained onto the first
+//   punish  – fires back the instant he blocks you
+//   reach   – arm advantage, added to his punch ranges
+//   gas     – extra recovery he eats after whiffing
+const ROSTER = [
+  {
+    name:'EDDIE "LAST CALL" PARR', rec:'12-9-2 · 3 KO', style:'Journeyman',
+    warn:'They found you a body to warm up on. He knows it, too.',
+    tip:'Everything here is a free lesson. Chain four punches and watch the multiplier.',
+    hp:170, skin:0xD3A377, trunk:0x6B1F2A, glove:0xE8E2D6, boot:0x2B2118,
+    scale:1.0, bulk:1.0, mirror:false, accent:'#E8E2D6',
+    speed:1.30, want:1.85, aggr:[0.55,1.15], wind:0.44, block:0.12, dmg:0.65,
+    flurry:0, punish:false, reach:0, gas:0.2, circle:0.30, moves:['jab','cross']
+  },
+  {
+    name:'"BULL" OKONKWO', rec:'27-3 · 24 KO', style:'Swarmer',
+    warn:'He does not stop coming forward. There is no outside against him.',
+    tip:'You cannot walk backwards faster than he walks forward. Turn him instead — circle.',
+    hp:270, skin:0x6B4A34, trunk:0xB8320F, glove:0xFF6A1E, boot:0x2A0C06,
+    scale:0.96, bulk:1.20, mirror:false, accent:'#FF6A1E',
+    speed:2.25, want:1.30, aggr:[0.16,0.42], wind:0.22, block:0.05, dmg:0.55,
+    flurry:2, punish:false, reach:-0.1, gas:0.1, circle:0.55, moves:['jab','hook','upper']
+  },
+  {
+    name:'ANDRE "SILK" LEMAIRE', rec:'31-1 · 11 KO', style:'Out-boxer',
+    warn:'Long arms, longer patience. He will fight you from another postcode.',
+    tip:'His jab outranges yours. Cut the ring off — do not chase him in a circle.',
+    hp:230, skin:0x4A3226, trunk:0x0E5A4A, glove:0x1BE0A0, boot:0x06231C,
+    scale:1.09, bulk:0.90, mirror:false, accent:'#1BE0A0',
+    speed:2.30, want:2.45, aggr:[0.35,0.8], wind:0.26, block:0.22, dmg:0.8,
+    flurry:0, punish:false, reach:0.42, gas:0.15, circle:0.85, moves:['jab','jab','cross']
+  },
+  {
+    name:'DEACON WILLS', rec:'24-2 · 15 KO', style:'Counter-puncher',
+    warn:'He does not throw first. He throws last.',
+    tip:'Every punch you feed his guard comes straight back. Break it with the uppercut.',
+    hp:280, skin:0x8A5F3F, trunk:0x2B2438, glove:0xC9B8FF, boot:0x141020,
+    scale:1.02, bulk:1.05, mirror:false, accent:'#C9B8FF',
+    speed:1.75, want:1.75, aggr:[0.45,0.95], wind:0.30, block:0.48, dmg:1.15,
+    flurry:1, punish:true, reach:0.05, gas:0.3, circle:0.35, moves:['cross','upper','hook']
+  },
+  {
+    name:'YUKI "LEFTY" SATO', rec:'29-0 · 19 KO', style:'Southpaw',
+    warn:'Mirror stance. Everything arrives from the wrong side.',
+    tip:'His lead hand is where his rear hand should be. Slip the other way.',
+    hp:275, skin:0xE0B489, trunk:0x8A0F3C, glove:0xFF2D55, boot:0x2A0510,
+    scale:1.0, bulk:0.98, mirror:true, accent:'#FF2D55',
+    speed:2.10, want:1.75, aggr:[0.28,0.6], wind:0.24, block:0.25, dmg:0.95,
+    flurry:1, punish:false, reach:0.08, gas:0.2, circle:0.7, moves:['jab','cross','hook','upper']
+  },
+  {
+    name:'IVAN "THE CLIFF" BRANDT', rec:'19-6 · 19 KO', style:'Slugger',
+    warn:'Nineteen wins, nineteen knockouts. He has never heard a final bell.',
+    tip:'He is slow and he telegraphs. One clean shot takes half your head off — slip it.',
+    hp:330, skin:0xBF8A63, trunk:0x1A1A1E, glove:0xFFE03D, boot:0x0C0C0E,
+    scale:1.14, bulk:1.30, mirror:false, accent:'#FFE03D',
+    speed:1.35, want:1.60, aggr:[0.7,1.5], wind:0.58, block:0.10, dmg:2.30,
+    flurry:0, punish:false, reach:0.12, gas:0.95, circle:0.15, moves:['hook','upper']
+  },
+  {
+    name:'"HAMMER" DRAKE VOSS', rec:'44-0 · 41 KO', style:'Champion',
+    warn:'Undefeated. He boxes until he is hurt, and then he stops boxing.',
+    tip:'He changes styles as he fades. Whatever worked in the first minute will not work in the last.',
+    hp:400, skin:0x8E6A50, trunk:0x0F2A55, glove:0x25E5FF, boot:0x0A1C34,
+    scale:1.06, bulk:1.14, mirror:false, accent:'#25E5FF',
+    speed:2.05, want:2.05, aggr:[0.3,0.7], wind:0.30, block:0.32, dmg:1.30,
+    flurry:1, punish:true, reach:0.18, gas:0.25, circle:0.6, moves:['jab','cross','hook','upper']
+  }
+];
+const RUN = { bout:0, t0:0, totalDmg:0, bestCombo:0, runT0:0, mode:'gauntlet', pick:0, kos:0, spec:null };
+
+// ============================================================ modes
+// The combat engine doesn't care what the card says, so the modes only change
+// the terms: who walks out, how hard everyone's chin is, and what winning means.
+const MODES = [
+  { id:'gauntlet', name:'The Gauntlet', tag:'7 men · one night',
+    blurb:'The card as written. Seven men in order, a cutman between each, and no way back.',
+    heal:38, dmg:1, foeDmg:1 },
+  { id:'survival', name:'Survival', tag:'endless · escalating',
+    blurb:'They keep sending them out. Each one is harder than the last and the cutman is getting tired.',
+    heal:14, dmg:1, foeDmg:1, endless:true },
+  { id:'glassjaw', name:'Glass Jaw', tag:'everyone is made of glass',
+    blurb:'Five times the damage. Both ways. Two clean shots is somebody\u2019s whole career.',
+    heal:60, dmg:5, foeDmg:5 },
+  { id:'exhibition', name:'Exhibition', tag:'pick your man',
+    blurb:'No card, no stakes, no cutman needed. Just you and whoever you point at.',
+    heal:100, dmg:1, foeDmg:1, pick:true }
+];
+function M(){ return MODES.find(function(m){ return m.id === RUN.mode; }) || MODES[0]; }
+
+// survival builds men that don't exist: a roster face with the dials turned up
+function survivalSpec(n){
+  const base = ROSTER[(Math.random()*ROSTER.length)|0];
+  const s = Object.assign({}, base);
+  s.hp    = Math.round(base.hp * (0.75 + n*0.15));
+  s.dmg   = base.dmg * (1 + n*0.055);
+  s.speed = Math.min(2.6, base.speed * (1 + n*0.014));
+  s.wind  = Math.max(0.13, base.wind * (1 - n*0.035));
+  s.aggr  = [Math.max(0.12, base.aggr[0]*(1-n*0.04)), Math.max(0.3, base.aggr[1]*(1-n*0.04))];
+  s.flurry = base.flurry + (n >= 6 ? 1 : 0);
+  s.rec   = 'BOUT ' + (n+1) + ' · ' + base.style.toUpperCase();
+  s.warn  = n === 0 ? base.warn : 'Number ' + (n+1) + '. They are not running out of men.';
+  s.tip   = base.tip;
+  return s;
+}
+function specFor(n){
+  const m = M();
+  if(m.pick) return ROSTER[RUN.pick];
+  if(m.endless) return survivalSpec(n);
+  return ROSTER[n % ROSTER.length];
+}
+// survival rolls a new man each call, so the bout's opponent is decided ONCE
+// and held — otherwise the corner scouts one fighter and a different one
+// walks out of the tunnel.
+function prepBout(){ RUN.spec = specFor(RUN.bout); return RUN.spec; }
+function curSpec(){ return RUN.spec || prepBout(); }
+
+function pathPos(f, mv, t, target){
+  const sd = sideOf(f, mv);
+  const guard = sd === 'L' ? f.guardL : f.guardR;
+  const hf = mv.hit;
+  let e = t < hf ? Math.pow(t/hf, 0.55) : 1 - Math.pow((t-hf)/(1-hf), 1.5);
+  e = clamp(e, 0, 1);
+  const p = new V3().copy(guard).lerp(target, e);
+  const bulge = Math.sin(e*Math.PI);
+  if(mv.arc === 'hook'){ p.x += (sd==='L'?-1:1)*bulge*0.72; p.y += bulge*0.06; }
+  else if(mv.arc === 'upper'){ p.y -= bulge*0.50; p.z += bulge*0.30; p.y += e*0.30; }
+  else p.y += bulge*0.03;
+  return p;
+}
+// these men are not the same size, so a punch has to aim at the head that's
+// actually there. We aim at the CENTRE of it and let resolveContacts stop the
+// glove on the skin — guessing a stopping distance here is what leaves gaps.
+function punchTarget(f, mv){
+  const opp = (f === P) ? F : P;
+  const ms = f.group.scale.x || 1;          // thrower's scale
+  const os = opp.group.scale.x || 1;        // target's scale
+  const worldReach = clamp(gap() - 0.05, 0.55, 1.62 + (f.spec ? f.spec.reach : 0));
+  return new V3(
+    (sideOf(f, mv) === 'L' ? -0.04 : 0.04) / ms,
+    (1.74 * os) / ms,
+    -worldReach / ms
+  );
+}
+function throwPunch(f, name, onImpact){
+  if(f.stagger > 0 || f.dead) return false;
+  // cancel into the next punch once this one has already connected — that's the combo engine
+  if(f.punch && !(f.punch.done && f.punch.t > 0.58)) return false;
+  const mv = MOVES[name];
+  f.punch = { mv:mv, name:name, t:0, done:false, target:punchTarget(f, mv), cb:onImpact };
+  return true;
+}
+
+// ============================================================ HUD
+function setBars(){
+  UI.foeFill.style.transform = 'scaleX(' + Math.max(0,G.foeHP/G.foeMax) + ')';
+  UI.foeGhost.style.transform = 'scaleX(' + Math.max(0,G.foeHP/G.foeMax) + ')';
+  UI.meFill.style.transform = 'scaleX(' + Math.max(0,G.meHP/G.meMax) + ')';
+  UI.superFill.style.transform = 'scaleX(' + Math.max(0,G.meter/G.meterMax) + ')';
+  UI.foeFill.classList.toggle('low', G.foeHP/G.foeMax < 0.22);
+  UI.superBox.classList.toggle('ready', G.meter >= G.meterMax);
+}
+let shoutT = 0;
+function shout(txt, col){
+  UI.shout.textContent = txt;
+  UI.shout.style.color = col || '#FFF6E3';
+  UI.shout.style.textShadow = '4px 4px 0 rgba(0,0,0,.6), 0 0 30px ' + (col||'#fff');
+  shoutT = 0.9;
+}
+const numPool = [];
+for(let i=0;i<18;i++){ const s=document.createElement('span'); s.className='num'; s.style.opacity=0; UI.dmg.appendChild(s); numPool.push(s); }
+let numI = 0;
+const _pv = new V3();
+function dmgNum(worldPos, txt, col, big){
+  _pv.copy(worldPos).project(camera);
+  const s = numPool[numI++ % numPool.length];
+  s.textContent = txt; s.style.color = col;
+  s.style.left = ((_pv.x*0.5+0.5)*VW) + 'px';
+  s.style.top  = ((-_pv.y*0.5+0.5)*VH) + 'px';
+  s.style.fontSize = (big ? 46 : 28) + 'px';
+  s.style.animation = 'none'; void s.offsetWidth;
+  s.style.animation = 'rise ' + (big?1.1:0.85) + 's ease-out forwards';
+}
+// the onomatopoeia. tied to what actually landed, so it reads as a read-out
+// of the punch and not decoration.
+const POWWORDS = {
+  jab:['TIK','SNAP','JAB'], cross:['SMACK','CRACK','WHAP'],
+  hook:['POW','WHAM','SOCK'], upper:['POW','BOOM','KRUNCH'],
+  block:['CLANK','BLOK'], breaker:['CRUNCH','SHATTER'], hurt:['THUD','WHUMP']
+};
+const powPool = [];
+for(let i=0;i<8;i++){
+  const e = document.createElement('span');
+  e.className = 'pw'; e.style.opacity = 0;
+  el('pow').appendChild(e); powPool.push(e);
+}
+let powI = 0;
+function powText(worldPos, kind, size, col){
+  const list = POWWORDS[kind] || POWWORDS.hook;
+  const e = powPool[powI++ % powPool.length];
+  _pv.copy(worldPos).project(camera);
+  e.textContent = list[(Math.random()*list.length)|0];
+  e.style.left = ((_pv.x*0.5+0.5)*VW + (Math.random()-0.5)*40) + 'px';
+  e.style.top  = ((-_pv.y*0.5+0.5)*VH - 30 + (Math.random()-0.5)*30) + 'px';
+  e.style.fontSize = size + 'px';
+  e.style.color = col || '#FFE03D';
+  e.style.setProperty('--r', ((Math.random()-0.5)*22).toFixed(1) + 'deg');
+  e.style.animation = 'none'; void e.offsetWidth;
+  e.style.animation = 'pw ' + (0.36 + size*0.0016).toFixed(2) + 's steps(1,end) forwards';
+  // steps() so it snaps between keyframes like a comic panel, not a tween
+  e.style.animationTimingFunction = 'cubic-bezier(.2,1.6,.4,1)';
+}
+function tintPulse(col, amt){
+  UI.tint.style.background = col;
+  UI.tint.style.transition = 'none';
+  UI.tint.style.opacity = amt;
+  requestAnimationFrame(function(){
+    UI.tint.style.transition = 'opacity .3s ease-out';
+    UI.tint.style.opacity = 0;
+  });
+}
+function shakeIt(a){ G.trauma = Math.min(1.4, G.trauma + a); }
+
+// ============================================================ resolution
+function playerLands(name, blocked, guardBreak){
+  if(F.dead || state === S.DOWN) return;
+  // THE RULE: damage requires a fist in the air. This is only ever reached
+  // from a punch's impact frame, while that punch is still live — so if the
+  // hands aren't swinging, nothing here can happen.
+  if(!P.punch) return;
+  const mv = MOVES[name];
+  const hitPos = new V3(); F.head.getWorldPosition(hitPos);
+
+  if(blocked){
+    const chip = Math.round(mv.dmg*0.18);
+    G.foeHP -= chip;
+    burst(hitPos, 8, K.cyan, 3.2); shockRing(hitPos, K.cyan, 0.7);
+    dmgNum(hitPos, chip, '#25E5FF', false);
+    G.hitstop = 0.05; shakeIt(0.2);
+    impactFrames(1, 0x25E5FF, 0x0A0610);
+    popStar(hitPos, 0.26, 0x25E5FF, 0.10);
+    powText(hitPos, 'block', 26, '#25E5FF');
+    POST.uniforms.uAber.value = 0.004;
+    sfxBlock(); crowdBump(0.05); haptic(0.12, 0.42, 55, 10); shout('BLOCKED', '#25E5FF'); setBars();
+    // counter-punchers don't just absorb it — they answer immediately
+    if(AI.sp && AI.sp.punish && AI.phase === 'block'){
+      AI.phase = 'idle'; AI.chain = 0; AI.t = 0;
+      AI.block = 0; AI.forceAttack = true;   // he answers, he doesn't turtle again
+    }
+    return;
+  }
+
+  const fresh = name !== G.lastPunch;
+  G.combo++; G.comboT = 1.25; G.maxCombo = Math.max(G.maxCombo, G.combo); G.landed++;
+  let mult = 1 + G.combo*0.075;
+  if(!fresh) mult *= 0.55;
+  if(SUPER.on) mult *= 1.5;       // the flurry pays, but every shot must land
+  if(G.counter > 0){ mult *= 2.5; G.counter = 0; }
+  if(guardBreak) mult *= 1.6;
+
+  const dealt = Math.round(mv.dmg * mult * M().dmg);
+  G.foeHP = Math.max(0, G.foeHP - dealt);
+  G.damage += dealt;
+  G.meter = Math.min(G.meterMax, G.meter + dealt*0.55);
+
+  const power = Math.min(1, mv.shake + G.combo*0.03);
+  // HIT STOP: everything except the shake and the impact frame stops dead.
+  // a jab buys ~0.10s, an uppercut through a guard buys ~0.26s.
+  G.hitstop = 0.06 + power*0.14 + (guardBreak?0.06:0);
+  shakeIt(0.28 + power*0.55);
+  // IMPACT FRAME + the polygon + the noise it makes
+  impactFrames(power > 0.75 ? 3 : (power > 0.4 ? 2 : 1),
+               guardBreak ? 0x8B3BFF : (power > 0.6 ? 0xFFE03D : 0xFFF6E3), 0x0A0610);
+  popStar(hitPos, 0.34 + power*0.62, guardBreak ? 0x8B3BFF : (power > 0.55 ? 0xFF8A1E : 0xFFE03D),
+          0.14 + power*0.12);
+  if(power > 0.38 || G.combo >= 5){
+    powText(hitPos, guardBreak ? 'breaker' : name, 34 + power*46,
+            guardBreak ? '#C9B8FF' : '#FFE03D');
+  }
+  const U = POST.uniforms;
+  U.uAber.value = 0.004 + power*0.012;
+  U.uZoom.value = 0.03 + power*0.075;
+  U.uFlash.value = 0.10 + power*0.28;
+  U.uFlashCol.value.setHex(mv.col);
+  U.uShock.value = 0.001;
+  if(power > 0.7) U.uGlitch.value = 0.6;
+
+  burst(hitPos, 14 + ((power*22)|0), mv.col, 4 + power*7);
+  shockRing(hitPos, mv.col, 0.8 + power*1.4);
+  bulbStorm(4 + ((power*22)|0));
+  dmgNum(hitPos, dealt, guardBreak ? '#8B3BFF' : (fresh ? '#FFE03D' : '#9A9186'), power > 0.7 || G.combo >= 8);
+  if(!fresh) dmgNum(hitPos.clone().add(new V3(0.3,0.25,0)), 'SLOPPY', '#6E6459', false);
+
+  // knock him back a step — footwork gets driven by the punch
+  const kb = new V3().subVectors(F.pos, P.pos).setY(0).normalize().multiplyScalar(0.09 + power*0.13);
+  F.pos.add(kb);
+  F.stagger = 0.16 + power*0.14; F.hurt = 1;
+  F.head.position.z = -0.02 + (name==='upper' ? 0 : 0.10);
+  F.head.position.y = 1.80 + (name==='upper' ? 0.12 : 0);
+  F.torso.rotation.x = -0.16*power;
+
+  sfxHit(power);
+  haptic(0.22 + power*0.72, 0.35, 80 + power*110, Math.round(14 + power*46));
+  crowdBump(0.16 + power*0.42 + Math.min(0.3, G.combo*0.02));
+  if(G.combo % 4 === 0) sfxRoar(0.05 + G.combo*0.004);
+  if(guardBreak) shout('GUARD BREAK', '#8B3BFF');
+  else for(let i=RANKS.length-1;i>=0;i--)
+    if(G.combo === RANKS[i].n){ shout(RANKS[i].t+'!', RANKS[i].c); tintPulse(RANKS[i].c, 0.28); break; }
+
+  UI.comboN.textContent = G.combo;
+  let rk = 'HIT';
+  for(let i=0;i<RANKS.length;i++) if(G.combo >= RANKS[i].n) rk = RANKS[i].t;
+  UI.comboR.textContent = rk + ' ×' + mult.toFixed(1);
+  UI.combo.style.opacity = 1;
+  UI.combo.classList.remove('pop'); void UI.combo.offsetWidth; UI.combo.classList.add('pop');
+
+  G.lastPunch = name; setBars();
+  if(G.foeHP <= 0) knockout();
+}
+function playerWhiffs(msg){
+  sfxWhiff();
+  G.combo = 0; UI.combo.style.opacity = 0; G.lastPunch = '';
+  POST.uniforms.uZoom.value = 0.05;
+  if(msg) shout(msg, '#9A9186');
+}
+function foeLands(dmg){
+  if(state !== S.FIGHT) return;
+  if(!F.punch) return;            // same rule for him
+
+  const hitPos = new V3(); P.head.getWorldPosition(hitPos);
+  if(G.blocking){
+    const chip = Math.round(dmg*0.2);
+    G.meHP = Math.max(0, G.meHP - chip);
+    G.meter = Math.min(G.meterMax, G.meter + 5);
+    shakeIt(0.3); G.hitstop = 0.05;
+    burst(hitPos, 10, K.cyan, 3.5);
+    sfxBlock(); shout('GUARD', '#25E5FF'); tintPulse('#25E5FF', 0.16);
+    P.pos.addScaledVector(new V3().subVectors(P.pos, F.pos).setY(0).normalize(), 0.10);
+  } else {
+    G.meHP = Math.max(0, G.meHP - dmg);
+    G.combo = 0; UI.combo.style.opacity = 0; G.lastPunch = '';
+    shakeIt(1.0); G.hitstop = 0.13;
+    impactFrames(3, 0xFF2D55, 0x0A0610);
+    popStar(hitPos, 0.9, 0xFF2D55, 0.2);
+    powText(hitPos, 'hurt', 62, '#FF2D55');
+    const U = POST.uniforms;
+    U.uGlitch.value = 0.9; U.uAber.value = 0.016;
+    U.uFlashCol.value.setHex(K.blood); U.uFlash.value = 0.34;
+    burst(hitPos, 22, K.blood, 6); tintPulse('#FF2D55', 0.5);
+    sfxHit(1); shout('HURT', '#FF2D55'); crowdBump(0.5); haptic(0.95, 0.7, 240, [55,25,45]);
+    P.pos.addScaledVector(new V3().subVectors(P.pos, F.pos).setY(0).normalize(), 0.18);
+  }
+  setBars();
+  if(G.meHP <= 0) downed();
+}
+// one rule covers slipping and stepping out of range
+function foeStrikeResolve(name){
+  if(state !== S.FIGHT) return;
+  const mv = MOVES[name];
+  const sp = AI.sp;
+  if(gap() > foeRange(name) + 0.06 || G.invuln > 0){
+    sfxWhiff();
+    // a big man who misses is a big man standing still — that's your window
+    AI.t += sp.gas; AI.chain = 0;
+    G.counter = 1.1 + sp.gas*0.5; G.slow = 0.4;
+    G.meter = Math.min(G.meterMax, G.meter + 12);
+    shout('HE MISSED — COUNTER', '#8B3BFF'); crowdBump(0.4);
+    tintPulse('#8B3BFF', 0.26);
+    POST.uniforms.uZoom.value = 0.08;
+    setBars(); return;
+  }
+  foeLands(Math.round(mv.dmg*0.85*sp.dmg*M().foeDmg));
+}
+
+// ============================================================ super
+// A flurry is six real punches, thrown through the same pipeline as every
+// other punch: same animation, same contact resolve, same impact callback.
+// It used to be six setTimeouts that subtracted health while the hands never
+// moved. Now if a punch misses, it misses.
+const SUPER = { on:false, queue:[] };
+const _sv = new V3();
+function fireSuper(){
+  if(G.meter < G.meterMax || state !== S.FIGHT || SUPER.on) return;
+  G.meter = 0;
+  SUPER.on = true;
+  SUPER.queue = ['jab','cross','hook','jab','cross','upper'];   // varied: no SLOPPY penalty
+  G.slow = 0.8;                       // a beat of slow-mo, then let it rip
+  shout('FLURRY', '#FFE03D'); tintPulse('#8B3BFF', 0.6);
+  sfxRoar(0.22); crowdBump(0.9); haptic(0.5, 0.85, 420, [26,18,26,18,26,18,60]);
+  POST.uniforms.uFlash.value = 0.4;
+  POST.uniforms.uFlashCol.value.setHex(K.violet);
+  setBars();
+}
+function superTick(dt){
+  if(!SUPER.on) return;
+  if(state !== S.FIGHT || P.dead){ SUPER.on = false; SUPER.queue.length = 0; return; }
+  if(SUPER.queue.length === 0 && !P.punch){ SUPER.on = false; return; }
+
+  // walk him down — you can't unload on a man who isn't there
+  const d = gap();
+  if(d > 1.45){
+    _sv.subVectors(F.pos, P.pos).setY(0);
+    if(_sv.lengthSq() > 1e-8){
+      _sv.normalize();
+      P.pos.addScaledVector(_sv, Math.min(2.8*dt, d - 1.45));
+    }
+  }
+  // next punch goes the instant the last one is cancellable — but not until
+  // he's actually in front of you. swinging at air is honest, it just isn't
+  // what you spent a full meter on.
+  if(SUPER.queue.length && d <= 1.72 && (!P.punch || (P.punch.done && P.punch.t > 0.5))){
+    const nm = SUPER.queue[0];
+    if(throwPunch(P, nm, function(){ punchImpact(nm); })){
+      SUPER.queue.shift();
+      POST.uniforms.uFlashCol.value.setHex(SUPER.queue.length % 2 ? K.lemon : K.violet);
+    }
+  }
+}
+
+// ============================================================ endings
+function knockout(){
+  if(state === S.KO || state === S.REPLAY) return;
+  state = S.KO; F.dead = true; G.slow = 2.2;
+  SUPER.on = false; SUPER.queue.length = 0;
+  REC.koFrame = REC.count;              // this exact frame is the money shot
+  buildRagdoll(F);
+  _koDir.subVectors(F.pos, P.pos).setY(0).normalize();
+  ragImpulse(F, _koDir, 1.0);
+  const U = POST.uniforms;
+  U.uFlash.value = 1.0; U.uFlashCol.value.setHex(0xFFFFFF); U.uShock.value = 0.001;
+  shakeIt(1.4); bulbStorm(70);
+  impactFrames(5, 0xFFF6E3, 0x0A0610);
+  const _kp = new V3(); F.head.getWorldPosition(_kp);
+  popStar(_kp, 1.5, 0xFFE03D, 0.5);
+  powText(_kp, 'upper', 92, '#FFE03D');
+  sfxRoar(0.3); crowdBump(1.5); haptic(1, 1, 750, [45,35,70,35,180]); tone(90, 30, 1.2, 'sawtooth', 0.2);
+  shout('K.O.', '#FFE03D'); UI.shout.style.fontSize = '104px';
+  // let it land live for a beat, then roll the tape
+  setTimeout(function(){ startReplay(F, P, nextBout); }, 2000);
+}
+function downed(){
+  if(state === S.DOWN || state === S.REPLAY) return;
+  state = S.DOWN; G.slow = 2.0; P.dead = true;
+  REC.koFrame = REC.count;
+  buildRagdoll(P);
+  _koDir.subVectors(P.pos, F.pos).setY(0).normalize();
+  ragImpulse(P, _koDir, 1.0);
+  POST.uniforms.uFlash.value = 0.8; POST.uniforms.uFlashCol.value.setHex(K.blood);
+  shakeIt(1.2); tintPulse('#FF2D55', 0.85); shout('DOWN', '#FF2D55');
+  setTimeout(function(){
+    RUN.totalDmg += G.damage; G.damage = 0;
+    RUN.bestCombo = Math.max(RUN.bestCombo, G.maxCombo);
+    startReplay(P, F, lostCard);   // you get to watch it too
+  }, 2000);
+}
+
+// ============================================================ opponent
+const AI = { t:1.2, phase:'idle', wind:0, punchName:'', block:0, circle:1, circleT:0,
+             want:1.8, chain:0, sp:null, stepIn:0, forceAttack:false };
+// his reach advantage applies to his punches, not yours
+function foeRange(name){ return MOVES[name].range + (AI.sp ? AI.sp.reach : 0); }
+
+function aiUpdate(dt){
+  if(F.dead || !AI.sp) return;
+  const sp = AI.sp;
+  const rush = 1 - G.foeHP/G.foeMax;
+  const d = gap();
+  AI.t -= dt;
+  AI.circleT -= dt;
+  if(AI.circleT <= 0){ AI.circle = Math.random() < 0.5 ? -1 : 1; AI.circleT = 0.9 + Math.random()*1.8; }
+
+  // the champion stops boxing once he's hurt — his want/aggression collapse inward
+  let want = sp.want, aggrLo = sp.aggr[0], aggrHi = sp.aggr[1], flurry = sp.flurry, spd = sp.speed;
+  if(sp.style === 'Champion' && rush > 0.4){
+    const k = (rush - 0.4) / 0.6;
+    want -= k*0.75; aggrLo *= 1 - k*0.5; aggrHi *= 1 - k*0.55;
+    flurry += k > 0.5 ? 1 : 0; spd += k*0.35;
+  }
+
+  if(F.stagger > 0){ AI.t = Math.max(AI.t, 0.3); AI.phase = 'idle'; AI.chain = 0; }
+  else if(AI.phase === 'idle' && AI.t <= 0){
+    if(AI.chain > 0){                       // mid-flurry: no thinking, just throw
+      AI.punchName = sp.moves[(Math.random()*sp.moves.length)|0];
+      AI.phase = 'wind'; AI.wind = sp.wind*0.45; AI.t = AI.wind; AI.chain--;
+    }
+    else if(Math.random() < sp.block && !AI.forceAttack){
+      AI.phase = 'block'; AI.block = 0.4 + Math.random()*0.5; AI.t = AI.block + 0.12;
+    }
+    else {
+      AI.forceAttack = false;
+      AI.punchName = sp.moves[(Math.random()*sp.moves.length)|0];
+      if(d <= foeRange(AI.punchName) - 0.05){
+        AI.phase = 'wind'; AI.wind = sp.wind*(0.85 + Math.random()*0.3); AI.t = AI.wind;
+        AI.chain = flurry; AI.stepIn = 0;
+      } else {
+        // he's picked a shot he can't reach — step in for it, then re-check.
+        // without this an out-boxer whose reach is shorter than his preferred
+        // range would circle forever and never throw a punch.
+        AI.stepIn = foeRange(AI.punchName) - 0.20;
+        AI.t = 0.1;
+      }
+    }
+  }
+  else if(AI.phase === 'wind' && AI.t <= 0){
+    const nm = AI.punchName;
+    throwPunch(F, nm, function(){ foeStrikeResolve(nm); });
+    AI.phase = 'recover';
+    AI.t = MOVES[nm].dur + (AI.chain > 0 ? 0.05 : aggrLo + Math.random()*(aggrHi-aggrLo));
+  }
+  else if((AI.phase === 'block' || AI.phase === 'recover') && AI.t <= 0){
+    AI.phase = 'idle';
+    AI.t = AI.chain > 0 ? 0 : (aggrLo*0.4 + Math.random()*aggrHi*0.5);
+  }
+
+  // ---- footwork: the range he wants depends on what he's doing ----
+  if(AI.phase === 'wind') AI.want = Math.min(want, 1.55);
+  else if(AI.phase === 'recover'){ AI.want = want + (sp.style === 'Swarmer' ? 0 : 0.35); AI.stepIn = 0; }
+  else if(AI.stepIn) AI.want = Math.min(want, AI.stepIn);   // closing for a shot
+  else AI.want = want;
+  spd *= (AI.phase === 'recover' ? 0.85 : 1) * (1 + rush*0.15);
+  const toP = new V3().subVectors(P.pos, F.pos).setY(0);
+  const dd = Math.max(toP.length(), 0.001);
+  toP.divideScalar(dd);
+  const side = new V3(-toP.z, 0, toP.x);
+  const closing = clamp(dd - AI.want, -1, 1);
+  const vel = new V3()
+    .addScaledVector(toP, closing * spd)
+    .addScaledVector(side, AI.circle * spd * sp.circle);
+  F.pos.addScaledVector(vel, dt);
+  return vel.lengthSq() > 0.04;
+}
+const foeBlocking = () => AI.phase === 'block' && AI.block > 0;
+
+// ============================================================ platform
+const OPT = { vibe:true, rumble:true, squish:1 };
+const PWA = { prompt:null };
+const IS_IOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const STANDALONE = !!navigator.standalone || matchMedia('(display-mode: standalone)').matches
+                   || matchMedia('(display-mode: fullscreen)').matches;
+
+addEventListener('beforeinstallprompt', function(e){
+  e.preventDefault(); PWA.prompt = e;
+  document.body.classList.add('installable');
+});
+addEventListener('appinstalled', function(){
+  PWA.prompt = null;
+  document.body.classList.remove('installable', 'ios-install');
+  toast('Installed — it locks landscape properly now');
+});
+// iOS has no install prompt, so we tell them where the button is instead
+if(IS_IOS && !STANDALONE) document.body.classList.add('ios-install');
+function doInstall(){
+  if(PWA.prompt){
+    PWA.prompt.prompt();
+    PWA.prompt.userChoice.then(function(r){
+      if(r && r.outcome === 'accepted') toast('Installing');
+      PWA.prompt = null;
+      document.body.classList.remove('installable');
+    }).catch(function(){});
+  } else if(IS_IOS){
+    toast('Share button, then "Add to Home Screen"');
+  } else {
+    toast('Serve this folder over https to install it');
+  }
+}
+if('serviceWorker' in navigator && location.protocol.indexOf('http') === 0){
+  addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
+
+// one call site for every kind of buzz: pad motors and the phone itself
+function haptic(strong, weak, ms, pattern){
+  if(OPT.rumble) padRumble(strong, weak, ms);
+  if(OPT.vibe && navigator.vibrate){
+    try{ navigator.vibrate(pattern || Math.round(ms*0.45)); }catch(e){}
+  }
+}
+function applySquish(){
+  [P, F].forEach(function(f){
+    f.dHead.max = SQUISH.headMax * OPT.squish;
+    f.dGL.max = SQUISH.gloveMax * OPT.squish;
+    f.dGR.max = SQUISH.gloveMax * OPT.squish;
+  });
+}
+
+// ============================================================ gamepad
+// Standard mapping (Xbox): triggers slip, bumpers block, face buttons punch.
+// Triggers are analog, so they're thresholded and edge-detected — a slip is a
+// discrete act, not something you hold.
+const PAD = {
+  idx:null, prev:{}, dead:0.22, on:false,
+  BTN:{ A:0, B:1, X:2, Y:3, LB:4, RB:5, LT:6, RT:7, BACK:8, START:9,
+        L3:10, R3:11, UP:12, DOWN:13, LEFT:14, RIGHT:15 }
+};
+const pmove = { x:0, z:0 };
+const BLOCK = { key:false, touch:false, pad:false };   // any source can hold the guard
+
+addEventListener('gamepadconnected', function(e){
+  PAD.idx = e.gamepad.index; PAD.on = true;
+  document.body.classList.add('pad');
+  toast('Controller ready · LT/RT slip · LB/RB block');
+});
+addEventListener('gamepaddisconnected', function(e){
+  if(PAD.idx === e.gamepad.index){ PAD.idx = null; PAD.on = false; PAD.prev = {}; }
+  pmove.x = pmove.z = 0; BLOCK.pad = false;
+  document.body.classList.remove('pad');
+});
+function padGet(){
+  const pads = navigator.getGamepads ? navigator.getGamepads() : null;
+  if(!pads) return null;
+  if(PAD.idx !== null && pads[PAD.idx] && pads[PAD.idx].connected) return pads[PAD.idx];
+  for(let i=0;i<pads.length;i++){
+    if(pads[i] && pads[i].connected){ PAD.idx = i; return pads[i]; }
+  }
+  return null;
+}
+function padDown(gp, i, thresh){
+  const b = gp.buttons[i];
+  if(b === undefined) return false;
+  if(typeof b === 'object') return b.value > thresh || (b.pressed && b.value === 0);
+  return b > thresh;
+}
+function padRumble(strong, weak, ms){
+  const gp = padGet();
+  if(!gp) return;
+  const act = gp.vibrationActuator;
+  if(!act || !act.playEffect) return;
+  try{
+    act.playEffect('dual-rumble', {
+      startDelay:0, duration:ms,
+      strongMagnitude:clamp(strong,0,1), weakMagnitude:clamp(weak,0,1)
+    });
+  }catch(e){}
+}
+function padTick(){
+  const gp = padGet();
+  if(!gp){ pmove.x = pmove.z = 0; BLOCK.pad = false; return; }
+  if(!PAD.on){ PAD.on = true; document.body.classList.add('pad'); }
+  const B = PAD.BTN, down = {};
+  for(const k in B){
+    // triggers pull long and lazy, so they trip early
+    down[k] = padDown(gp, B[k], (k === 'LT' || k === 'RT') ? 0.4 : 0.5);
+  }
+  const hit = function(k){ return down[k] && !PAD.prev[k]; };
+  let any = false;
+  for(const k in down) if(down[k] && !PAD.prev[k]) any = true;
+
+  if(state === S.REPLAY){
+    if(any) endReplay();
+  } else if(paused){
+    if(hit('START') || hit('B')) togglePause(false);
+    if(hit('DOWN') || hit('RIGHT')) cardNav(1);
+    if(hit('UP') || hit('LEFT')) cardNav(-1);
+  } else if(state !== S.FIGHT){
+    if(hit('DOWN') || hit('RIGHT')) cardNav(1);
+    if(hit('UP') || hit('LEFT')) cardNav(-1);
+    if(hit('A') || hit('START')){
+      const a = document.activeElement;
+      if(a && a.click && a.closest && a.closest('#veil')) a.click();
+      else if(UI.go) UI.go.click();
+    }
+  } else if(hit('START')){
+    togglePause(true);
+  } else {
+    if(hit('X')) tryPunch('jab');
+    if(hit('Y')) tryPunch('cross');
+    if(hit('A')) tryPunch('hook');
+    if(hit('B')) tryPunch('upper');
+    if(hit('LT')) slip(-1);
+    if(hit('RT')) slip(1);
+    if(hit('R3') || hit('BACK')) fireSuper();
+  }
+  BLOCK.pad = !!(down.LB || down.RB);
+
+  // left stick, radial deadzone, rescaled so it eases in from a standstill
+  let ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
+  const m = Math.hypot(ax, ay);
+  if(m < PAD.dead){ ax = ay = 0; }
+  else {
+    const s = ((m - PAD.dead) / (1 - PAD.dead)) / m;
+    ax *= s; ay *= s;
+  }
+  if(down.LEFT) ax -= 1; if(down.RIGHT) ax += 1;
+  if(down.UP)   ay -= 1; if(down.DOWN)  ay += 1;
+  pmove.x = clamp(ax, -1, 1);
+  pmove.z = clamp(-ay, -1, 1);    // stick up = forward = at him
+
+  PAD.prev = down;
+}
+function toast(msg){
+  const t = el('toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(function(){ t.classList.remove('on'); }, 2600);
+}
+
+// ============================================================ input
+const keys = {};
+const move = { x:0, z:0 };     // -1..1, relative to facing
+// The ONLY door damage comes through. It is called from a punch's impact
+// frame and nowhere else — see the guard at the top of playerLands.
+function punchImpact(name){
+  const mv = MOVES[name];
+  G.thrown++;
+  if(gap() > mv.range){ playerWhiffs('TOO FAR'); return; }
+  if(AI.phase === 'wind' && Math.random() < 0.08){ playerWhiffs('SLIPPED'); return; }
+  playerLands(name, foeBlocking() && !mv.breaks, foeBlocking() && !!mv.breaks);
+}
+function tryPunch(name){
+  if(state !== S.FIGHT || SUPER.on) return;      // during a flurry the queue has the hands
+  const ok = throwPunch(P, name, function(){ punchImpact(name); });
+  if(ok) audioInit();
+}
+function slip(dir){
+  if(state !== S.FIGHT || G.weave > 0) return;
+  G.weave = 0.42; G.weaveDir = dir; G.invuln = 0.30;
+  if(F.punch && !F.punch.done){
+    G.counter = 1.1; G.slow = 0.45;
+    G.meter = Math.min(G.meterMax, G.meter + 14);
+    shout('SLIP! COUNTER', '#8B3BFF'); tintPulse('#8B3BFF', 0.32);
+    POST.uniforms.uZoom.value = 0.09; setBars();
+  }
+  tone(600, 300, 0.09, 'triangle', 0.03);
+  haptic(0, 0.3, 60, 8);
+}
+addEventListener('keydown', function(e){
+  if(keys[e.code]) return;
+  keys[e.code] = true;
+  // during a replay any key bails out — checked first, or Space would reach
+  // through and press the button on the card hiding behind it
+  if(state === S.REPLAY){ e.preventDefault(); endReplay(); return; }
+  if(e.code === 'Escape'){ e.preventDefault(); togglePause(); return; }
+  if(paused) return;
+  // whatever the card is offering, Space/Enter takes it — unless the player has
+  // tabbed onto a button, in which case the browser already knows what to do
+  if(state !== S.FIGHT && (e.code==='Space'||e.code==='Enter')){
+    const a = document.activeElement;
+    if(a && a.tagName === 'BUTTON' && a.closest('#veil')) return;
+    e.preventDefault(); if(UI.go) UI.go.click(); return;
+  }
+  switch(e.code){
+    case 'KeyJ': tryPunch('jab'); break;
+    case 'KeyK': tryPunch('cross'); break;
+    case 'KeyL': tryPunch('hook'); break;
+    case 'KeyI': tryPunch('upper'); break;
+    case 'KeyQ': slip(-1); break;
+    case 'KeyE': slip(1); break;
+    case 'KeyF': fireSuper(); break;
+    case 'Space': e.preventDefault(); BLOCK.key = true; break;
+  }
+});
+addEventListener('keyup', function(e){
+  keys[e.code] = false;
+  if(e.code === 'Space') BLOCK.key = false;
+});
+const smove = { x:0, z:0 };    // stick, written by the touch handlers
+function readKeys(){
+  let x = 0, z = 0;
+  if(keys['KeyW'] || keys['ArrowUp'])    z += 1;
+  if(keys['KeyS'] || keys['ArrowDown'])  z -= 1;
+  if(keys['KeyD'] || keys['ArrowRight']) x += 1;
+  if(keys['KeyA'] || keys['ArrowLeft'])  x -= 1;
+  if(x || z){ const m = Math.hypot(x,z); x /= m; z /= m; }
+  // keys, thumbstick and gamepad coexist; none of them erases the others
+  move.x = clamp(x + smove.x + pmove.x, -1, 1);
+  move.z = clamp(z + smove.z + pmove.z, -1, 1);
+  G.blocking = BLOCK.key || BLOCK.touch || BLOCK.pad;
+}
+
+// touch
+function hold(id, on, off){
+  const b = el(id);
+  b.addEventListener('pointerdown', function(e){ e.preventDefault(); on(); });
+  if(off){ b.addEventListener('pointerup', off); b.addEventListener('pointerleave', off); }
+}
+hold('bJab',   () => tryPunch('jab'));
+hold('bCross', () => tryPunch('cross'));
+hold('bHook',  () => tryPunch('hook'));
+hold('bUp',    () => { if(G.meter >= G.meterMax) fireSuper(); else tryPunch('upper'); });
+hold('bQ',     () => slip(-1));
+hold('bE',     () => slip(1));
+hold('bBlk',   () => { BLOCK.touch = true; }, () => { BLOCK.touch = false; });
+
+// stick — deltas get un-rotated by hand when the app is CSS-rotated
+const nub = el('nub');
+let stickId = null, sx0 = 0, sy0 = 0;
+el('stickZone').addEventListener('pointerdown', function(e){
+  e.preventDefault(); stickId = e.pointerId; sx0 = e.clientX; sy0 = e.clientY;
+});
+addEventListener('pointermove', function(e){
+  if(e.pointerId !== stickId) return;
+  let dx = e.clientX - sx0, dy = e.clientY - sy0;
+  if(rotated){ const t = dx; dx = dy; dy = -t; }   // screen space -> app space
+  const R = 42, m = Math.hypot(dx,dy);
+  if(m > R){ dx = dx/m*R; dy = dy/m*R; }
+  nub.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+  smove.x = dx/R; smove.z = -dy/R;
+});
+addEventListener('pointerup', function(e){
+  if(e.pointerId !== stickId) return;
+  stickId = null; smove.x = 0; smove.z = 0;
+  nub.style.transform = '';
+});
+// ============================================================ pause & extras
+let paused = false;
+function togglePause(on){
+  const want = on === undefined ? !paused : on;
+  if(want && state !== S.FIGHT) return;
+  paused = want;
+  el('pause').classList.toggle('on', paused);
+  if(paused){ IMP.frames = 0; POST.uniforms.uImpact.value = 0; }
+  if(!paused) clock.getDelta();          // don't bank the time spent in the menu
+  if(paused) BLOCK.key = BLOCK.touch = BLOCK.pad = false;
+}
+el('pResume').onclick = function(){ togglePause(false); };
+el('pQuit').onclick = function(){ togglePause(false); menuCard(); };
+el('optVibe').onchange = function(){ OPT.vibe = this.checked; if(this.checked) haptic(0,0.3,60,25); };
+el('optRumble').onchange = function(){ OPT.rumble = this.checked; if(this.checked) haptic(0.5,0.5,140,0); };
+el('optSquish').oninput = function(){
+  OPT.squish = (+this.value)/100;
+  el('optSquishV').textContent = this.value + '%';
+  applySquish();
+};
+el('keyref').innerHTML =
+  '<b>WASD</b> footwork &nbsp;·&nbsp; <b>J K L I</b> jab cross hook upper &nbsp;·&nbsp; ' +
+  '<b>Q E</b> slip &nbsp;·&nbsp; <b>Space</b> block &nbsp;·&nbsp; <b>F</b> flurry<br>' +
+  '<b>Mouse</b> left jab · right cross &nbsp;·&nbsp; ' +
+  '<b>Pad</b> LT/RT slip · LB/RB block · XYAB punch · R3 flurry';
+
+// mouse: the two punches worth having on a mouse
+stage.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+stage.addEventListener('mousedown', function(e){
+  if(state !== S.FIGHT || paused || SUPER.on) return;
+  if(e.button === 0) tryPunch('jab');
+  else if(e.button === 2){ e.preventDefault(); tryPunch('cross'); }
+});
+
+// cards are fully navigable without a mouse
+function cardFocusables(){
+  return Array.prototype.slice.call(
+    document.querySelectorAll('#veil button, #veil .mode, #veil .pick'));
+}
+function cardNav(dir){
+  const list = cardFocusables();
+  if(!list.length) return;
+  const cur = list.indexOf(document.activeElement);
+  if(cur < 0){ list[0].focus(); return; }
+  list[(cur + dir + list.length) % list.length].focus();
+}
+
+// ============================================================ the replay
+el('replay').addEventListener('pointerdown', function(e){ e.preventDefault(); endReplay(); });
+// A knockout is worth watching twice. Every rendered frame we snapshot the
+// transform of every animated bone into a ring buffer; on a KO we stop the
+// sim and play those frames back through a set of cinema cameras. It's a real
+// replay — the bodies do exactly what they just did, we only move the lens.
+const REC = { nodes:[], buf:[], size:300, count:0, koFrame:-1, stride:0 };
+function nodeList(f){
+  return [ f.group, f.body, f.torso, f.head, f.hips, f.shoulders[0], f.shoulders[1],
+    f.gloveL, f.gloveR,
+    f.armL.up, f.armL.fore, f.armL.elb, f.armR.up, f.armR.fore, f.armR.elb,
+    f.legs[0].thigh, f.legs[0].shin, f.legs[0].boot,
+    f.legs[1].thigh, f.legs[1].shin, f.legs[1].boot ];
+}
+function recInit(){
+  REC.nodes = nodeList(P).concat(nodeList(F));
+  REC.stride = REC.nodes.length * 10;          // pos3 + quat4 + scale3
+  // the squish lives in shader uniforms, not transforms, so it rides along in
+  // its own lane: amount + centre + direction per dentable surface
+  REC.defs = [
+    { m:P.head, d:P.dHead, f:P }, { m:P.gloveL, d:P.dGL, f:P }, { m:P.gloveR, d:P.dGR, f:P },
+    { m:F.head, d:F.dHead, f:F }, { m:F.gloveL, d:F.dGL, f:F }, { m:F.gloveR, d:F.dGR, f:F }
+  ];
+  REC.buf = []; REC.ext = [];
+  for(let i=0;i<REC.size;i++){
+    REC.buf.push(new Float32Array(REC.stride));
+    REC.ext.push(new Float32Array(REC.defs.length * 7));
+  }
+  REC.count = 0; REC.koFrame = -1;
+}
+function recFrame(){
+  const a = REC.buf[REC.count % REC.size];
+  let k = 0;
+  for(let i=0;i<REC.nodes.length;i++){
+    const n = REC.nodes[i];
+    a[k++]=n.position.x; a[k++]=n.position.y; a[k++]=n.position.z;
+    a[k++]=n.quaternion.x; a[k++]=n.quaternion.y; a[k++]=n.quaternion.z; a[k++]=n.quaternion.w;
+    a[k++]=n.scale.x; a[k++]=n.scale.y; a[k++]=n.scale.z;
+  }
+  const e = REC.ext[REC.count % REC.size];
+  let j = 0;
+  for(let i=0;i<REC.defs.length;i++){
+    const d = REC.defs[i].d;
+    e[j++]=d.a; e[j++]=d.p.x; e[j++]=d.p.y; e[j++]=d.p.z;
+    e[j++]=d.n.x; e[j++]=d.n.y; e[j++]=d.n.z;
+  }
+  REC.count++;
+}
+const _q0 = new THREE.Quaternion(), _q1 = new THREE.Quaternion();
+function frameAt(n){
+  const lo = Math.max(0, REC.count - REC.size), hi = REC.count - 1;
+  return REC.buf[clamp(Math.round(n), lo, hi) % REC.size];
+}
+function extAt(n){
+  const lo = Math.max(0, REC.count - REC.size), hi = REC.count - 1;
+  return REC.ext[clamp(Math.round(n), lo, hi) % REC.size];
+}
+function applyFrame(fr){
+  const f0 = Math.floor(fr), t = fr - f0;
+  const A = frameAt(f0), B = frameAt(f0 + 1);
+  let k = 0;
+  for(let i=0;i<REC.nodes.length;i++){
+    const n = REC.nodes[i];
+    n.position.set(A[k]+(B[k]-A[k])*t, A[k+1]+(B[k+1]-A[k+1])*t, A[k+2]+(B[k+2]-A[k+2])*t); k+=3;
+    _q0.set(A[k],A[k+1],A[k+2],A[k+3]); _q1.set(B[k],B[k+1],B[k+2],B[k+3]);
+    n.quaternion.copy(_q0).slerp(_q1, t); k+=4;
+    n.scale.set(A[k]+(B[k]-A[k])*t, A[k+1]+(B[k+1]-A[k+1])*t, A[k+2]+(B[k+2]-A[k+2])*t); k+=3;
+  }
+  // and the squish — the face was already caved in at 4x slow, so replay it
+  const EA = extAt(f0), EB = extAt(f0 + 1);
+  for(let i=0;i<REC.defs.length;i++){
+    const R = REC.defs[i], j = i*7;
+    const u = R.m.material.userData.u;
+    if(!u) continue;
+    const s = R.f.group.scale.x || 1;
+    u.uDentA.value = (EA[j] + (EB[j]-EA[j])*t) / s;
+    u.uDentP.value.set(EA[j+1], EA[j+2], EA[j+3]);
+    u.uDentN.value.set(EA[j+4], EA[j+5], EA[j+6]);
+  }
+  P.group.updateMatrixWorld(true); F.group.updateMatrixWorld(true);
+}
+
+// windows are in recorded frames relative to the punch; rate is playback speed
+const ANGLES = [
+  { name:'BROADCAST',  sub:'the shot that did it', a:-52, b:16,  rate:0.62, fov:44 },
+  { name:'THE MOMENT', sub:'contact',              a:-9,  b:15,  rate:0.26, fov:32 },
+  { name:'CANVAS CAM', sub:'down he goes',         a:4,   b:66,  rate:0.62, fov:58 },
+  { name:'AFTERMATH',  sub:'no count needed',      a:38,  b:132, rate:1.00, fov:48 }
+];
+const RP = { on:false, i:0, fr:0, loser:null, winner:null, done:null, burst:false, orbit:0 };
+const _lh = new V3(), _wh = new V3(), _dir = new V3(), _side = new V3(), _mid = new V3();
+
+function startReplay(loser, winner, done){
+  // if the tape is somehow empty, don't stall the night — go straight on
+  if(REC.koFrame < 0 || REC.count < 8){ if(done) done(); return; }
+  RP.on = true; RP.i = -1; RP.loser = loser; RP.winner = winner; RP.done = done;
+  RP.orbit = Math.random()*Math.PI*2;
+  state = S.REPLAY;
+  reachRing.visible = false;
+  // the live sparks belong to a moment we're about to rewind past
+  for(let i=0;i<parts.length;i++){ parts[i].life = 0; parts[i].m.visible = false; }
+  for(let i=0;i<rings.length;i++){ rings[i].life = 0; rings[i].m.visible = false; }
+  el('hud').style.opacity = 0;
+  el('replay').classList.add('on');
+  nextAngle();
+}
+function nextAngle(){
+  RP.i++;
+  if(RP.i >= ANGLES.length){ endReplay(); return; }
+  const A = ANGLES[RP.i];
+  RP.fr = REC.koFrame + A.a;
+  RP.burst = false;
+  el('rpName').textContent = A.name;
+  el('rpSub').textContent = A.sub;
+  el('rpNum').textContent = (RP.i+1) + ' / ' + ANGLES.length;
+  const bar = el('rpBar');
+  bar.style.transition = 'none'; bar.style.transform = 'scaleX(0)';
+  requestAnimationFrame(function(){
+    const secs = ((A.b - A.a) / A.rate) / 60;
+    bar.style.transition = 'transform ' + secs + 's linear';
+    bar.style.transform = 'scaleX(1)';
+  });
+  el('rpCut').classList.remove('flash'); void el('rpCut').offsetWidth;
+  el('rpCut').classList.add('flash');
+  tone(1200, 700, 0.05, 'square', 0.03);
+}
+function endReplay(){
+  if(!RP.on) return;
+  RP.on = false;
+  // must leave S.REPLAY or the loop keeps calling replayTick with no angle left
+  state = S.READY;
+  reachRing.visible = true;
+  el('hud').style.opacity = 1;
+  el('replay').classList.remove('on');
+  const fn = RP.done; RP.done = null;
+  if(fn) fn();
+}
+function replayTick(raw){
+  const A = ANGLES[RP.i];
+  const bMax = REC.count - 1 - REC.koFrame;
+  const bEnd = REC.koFrame + Math.min(A.b, bMax);
+  applyFrame(RP.fr);
+
+  // heads in world space, read back off the replayed skeleton
+  RP.loser.head.getWorldPosition(_lh);
+  RP.winner.head.getWorldPosition(_wh);
+  _dir.subVectors(_lh, _wh).setY(0);
+  if(_dir.lengthSq() < 1e-6) _dir.set(0,0,1);
+  _dir.normalize();
+  _side.set(-_dir.z, 0, _dir.x);
+  _mid.addVectors(_lh, _wh).multiplyScalar(0.5);
+
+  const span = Math.max(1, bEnd - (REC.koFrame + A.a));
+  const k = clamp((RP.fr - (REC.koFrame + A.a)) / span, 0, 1);
+
+  if(RP.i === 0){            // broadcast: side on, slow push in
+    camPos.copy(_mid).addScaledVector(_side, 3.5 - k*0.5).add(new V3(0, 2.05 - k*0.15, 0));
+    camLook.copy(_mid); camLook.y = 1.45;
+  } else if(RP.i === 1){     // the moment: tight, compressed, drifting
+    camPos.copy(_lh).addScaledVector(_side, 0.95 + k*0.12).addScaledVector(_dir, -0.34)
+      .add(new V3(0, 0.06 + k*0.05, 0));
+    camLook.copy(_lh);
+  } else if(RP.i === 2){     // canvas cam: down at his level, looking up
+    camPos.copy(_lh).addScaledVector(_dir, 1.5).addScaledVector(_side, -0.85 - k*0.3);
+    camPos.y = 0.30;
+    camLook.copy(_lh); camLook.y = Math.max(0.35, _lh.y);
+  } else {                   // aftermath: slow orbit on the man on the floor
+    const ang = RP.orbit + k*1.15;
+    camPos.set(_lh.x + Math.cos(ang)*2.5, 1.15 + k*0.75, _lh.z + Math.sin(ang)*2.5);
+    camLook.copy(_lh); camLook.y = 0.6;
+  }
+  camera.position.copy(camPos);
+  camera.lookAt(camLook);
+  camera.fov += (A.fov - camera.fov) * Math.min(1, raw*9);
+  camera.updateProjectionMatrix();
+
+  // re-fire the impact exactly where it happened, once per angle
+  if(!RP.burst && RP.fr >= REC.koFrame){
+    RP.burst = true;
+    burst(_lh, 22, K.lemon, 5);
+    shockRing(_lh, K.lemon, 1.4);
+    impactFrames(RP.i === 1 ? 4 : 2, 0xFFF6E3, 0x0A0610);   // longer on the tight angle
+    popStar(_lh, 1.1, 0xFFE03D, 0.42);
+    powText(_lh, 'upper', 76, '#FFE03D');
+    POST.uniforms.uFlash.value = 0.30;
+    POST.uniforms.uFlashCol.value.setHex(K.bone);
+    POST.uniforms.uAber.value = 0.010;
+    bulbStorm(14);
+    sfxHit(0.8);
+  }
+
+  RP.fr += A.rate;
+  if(RP.fr >= bEnd) nextAngle();
+}
+function applySpec(sp){
+  AI.sp = sp;
+  F.mirror = !!sp.mirror;
+  F.spec = sp;
+  F.mats.skin.color.setHex(sp.skin);
+  F.mats.headMat.color.setHex(sp.skin);          // cloned for its dent uniforms
+  F.mats.trunk.color.setHex(sp.trunk);
+  F.mats.gl.color.setHex(sp.glove);
+  F.mats.gloveMats.forEach(function(m){ m.color.setHex(sp.glove); });
+  F.mats.boot.color.setHex(sp.boot);
+  F.group.scale.setScalar(sp.scale);
+  F.torso.scale.set(sp.bulk, 1 + (sp.bulk-1)*0.4, sp.bulk);
+  G.foeMax = G.foeHP = sp.hp;
+  el('foeName').textContent = sp.name;
+  el('foeRec').textContent = sp.rec + ' · ' + sp.style.toUpperCase();
+  document.documentElement.style.setProperty('--accent', sp.accent);
+  drawPips();
+}
+function drawPips(){
+  const m = M();
+  if(m.pick){ el('pips').innerHTML = ''; return; }
+  // survival has no end, so the pips become a streak counter instead of a card
+  const n = m.endless ? Math.max(8, RUN.bout+2) : ROSTER.length;
+  let h = '';
+  for(let i=0;i<n;i++){
+    const cls = i < RUN.bout ? 'pip won' : (i === RUN.bout ? 'pip now' : 'pip');
+    h += '<i class="' + cls + '"></i>';
+  }
+  el('pips').innerHTML = h;
+}
+
+function startBout(){
+  audioInit();
+  if(actx && actx.state === 'suspended') actx.resume();
+  applySpec(curSpec());
+  G.combo = 0; G.comboT = 0; G.meter = Math.min(G.meter, 40);
+  G.lastPunch = ''; G.landed = 0; G.thrown = 0;
+  G.counter = 0; G.invuln = 0; G.weave = 0;
+  G.blocking = false; BLOCK.key = BLOCK.touch = BLOCK.pad = false;
+  G.hitstop = 0; G.slow = 0; G.trauma = 0;
+  SUPER.on = false; SUPER.queue.length = 0;
+  G.t0 = performance.now();
+  P.pos.set(0,0,1.1); F.pos.set(0,0,-1.1);
+  P.yaw = 0; F.yaw = Math.PI;
+  P.punch = null; F.punch = null;
+  P.dead = false; P.group.rotation.set(0,0,0); P.group.position.y = 0;
+  P.rag = null; F.rag = null;
+  [P,F].forEach(function(f){
+    f.body.position.set(0,0,0); f.body.rotation.set(0,0,0);
+    f.armL.bias.set(0,0,0); f.armR.bias.set(0,0,0);
+    f.shoulders[0].position.set(-0.40,1.52,0); f.shoulders[1].position.set(0.40,1.52,0);
+    f.hips.position.set(0,0.76,0); f.hips.rotation.set(0,0,0); f.hips.scale.set(1,1,1);
+    f.torso.position.set(0,1.24,0); f.torso.rotation.set(0,0,0);
+    f.head.rotation.set(0,0,0);
+  });
+  const _sp = curSpec();
+  F.torso.scale.set(_sp.bulk, 1+(_sp.bulk-1)*0.4, _sp.bulk);
+  P.torso.scale.set(1,1,1);
+  [P,F].forEach(function(f){
+    [f.dHead, f.dGL, f.dGR].forEach(function(d){ d.a=0; d.v=0; d.t=0; });
+    f.mats.headMat.emissiveIntensity = 0;
+  });
+  REC.koFrame = -1;
+  F.dead = false; F.stagger = 0; F.hurt = 0;
+  F.group.rotation.set(0,Math.PI,0); F.group.position.y = 0;
+  F.torso.rotation.set(0,0,0); F.head.position.set(0,1.80,-0.02);
+  F.mats.skin.emissiveIntensity = 0;
+  resetFeet(P); resetFeet(F);
+  AI.phase = 'idle'; AI.t = 1.0; AI.circleT = 0; AI.chain = 0; AI.block = 0;
+  AI.stepIn = 0; AI.forceAttack = false; AI.punchName = '';
+  UI.combo.style.opacity = 0; UI.shout.style.opacity = 0; UI.shout.style.fontSize = '40px';
+  UI.veil.classList.add('hide');
+  setBars(); state = S.FIGHT; clock.getDelta();
+  sfxRoar(0.12); crowdBump(0.7); bulbStorm(24);
+}
+
+// veil cards ------------------------------------------------------------
+function card(html, btns){
+  el('cardBody').innerHTML = html;
+  const box = el('cardBtns');
+  box.innerHTML = '';
+  (btns || []).forEach(function(b, i){
+    const el2 = document.createElement('button');
+    el2.textContent = b.label;
+    if(b.ghost) el2.className = 'ghost';
+    el2.onclick = function(){ if(!b.noFull) forceLandscape(); b.fn(); };
+    if(i === 0) el2.id = 'go';
+    box.appendChild(el2);
+  });
+  // install lives on the card, and only when the browser says it can
+  const ins = document.createElement('button');
+  ins.id = 'install'; ins.className = 'install';
+  ins.textContent = IS_IOS ? 'Add to home screen' : 'Install';
+  ins.onclick = doInstall;
+  box.appendChild(ins);
+  UI.go = el('go') || box.firstChild;
+  UI.veil.classList.remove('hide');
+}
+function titleCard(){ menuCard(); }
+
+function menuCard(){
+  state = S.READY;
+  let h = '<h1><span class="a">Glass</span><span class="b">Jaw</span></h1>' +
+    '<p class="sub">Pick your night.</p><div class="modes">';
+  MODES.forEach(function(m){
+    h += '<button class="mode" data-m="' + m.id + '">' +
+         '<h3>' + m.name + '</h3><div class="tag">' + m.tag + '</div>' +
+         '<p>' + m.blurb + '</p></button>';
+  });
+  h += '</div>';
+  card(h, [{ label:'Controls', ghost:true, noFull:true, fn:function(){ helpCard(); } }]);
+  Array.prototype.forEach.call(document.querySelectorAll('.mode'), function(b){
+    b.onclick = function(){
+      forceLandscape();
+      RUN.mode = b.dataset.m;
+      if(M().pick) pickCard(); else beginRun();
+    };
+  });
+}
+function helpCard(){
+  card('<div class="eyebrow">Controls</div>' +
+    '<div class="moves">' +
+      '<div class="mv"><b>W A S D</b><span>Footwork</span></div>' +
+      '<div class="mv"><b>J</b><span>Jab · longest reach</span></div>' +
+      '<div class="mv"><b>K</b><span>Cross · solid</span></div>' +
+      '<div class="mv"><b>Q / E</b><span>Slip · counter window</span></div>' +
+      '<div class="mv"><b>L</b><span>Hook · heavy, short</span></div>' +
+      '<div class="mv"><b>I</b><span>Upper · breaks guard</span></div>' +
+      '<div class="mv"><b>Space</b><span>Block · hold</span></div>' +
+      '<div class="mv"><b>F</b><span>Flurry · when lit</span></div>' +
+      '<div class="mv"><b>Esc</b><span>Pause &amp; settings</span></div>' +
+      '<div class="mv"><b>Mouse</b><span>L jab · R cross</span></div>' +
+      '<div class="mv"><b>Vary it</b><span>Repeats go sloppy</span></div>' +
+      '<div class="mv"><b>Range</b><span>Jab reaches furthest</span></div>' +
+    '</div>' +
+    '<div class="padrow">' +
+      '<b>X</b>jab <b>Y</b>cross <b>A</b>hook <b>B</b>upper <em>·</em>' +
+      '<b>LT</b><b>RT</b>slip <em>·</em> <b>LB</b><b>RB</b>block <em>·</em>' +
+      '<b>R3</b>flurry <em>·</em> <b>LS</b>footwork' +
+    '</div>',
+    [{ label:'Back', noFull:true, fn:menuCard }]);
+}
+function pickCard(){
+  let h = '<div class="eyebrow">Exhibition · pick your man</div><div class="picks">';
+  ROSTER.forEach(function(sp, i){
+    h += '<button class="pick" data-i="' + i + '" style="border-left:2px solid ' + sp.accent + '">' +
+         '<span>' + sp.name + '</span><i>' + sp.style + '</i></button>';
+  });
+  h += '</div>';
+  card(h, [{ label:'Back', ghost:true, noFull:true, fn:menuCard }]);
+  Array.prototype.forEach.call(document.querySelectorAll('.pick'), function(b){
+    b.onclick = function(){ RUN.pick = +b.dataset.i; beginRun(); };
+  });
+}
+function beginRun(){
+  G.meHP = G.meMax; G.meter = 0; G.maxCombo = 0; G.damage = 0;
+  RUN.bout = 0; RUN.totalDmg = 0; RUN.bestCombo = 0; RUN.kos = 0;
+  RUN.spec = null;
+  RUN.runT0 = performance.now();
+  cornerCard();
+}
+function cornerCard(){
+  const sp = prepBout();
+  const m = M();
+  const heal = RUN.bout === 0 ? 0 : Math.min(G.meMax - G.meHP, m.heal);
+  G.meHP += heal;
+  setBars();
+  const opener = RUN.bout === 0 ? m.name.toUpperCase()
+               : (m.endless ? 'STILL STANDING · ' + RUN.bout + ' DOWN' : 'THE CORNER');
+  const of = m.endless || m.pick ? '' : ' · ' + (RUN.bout+1) + ' of ' + ROSTER.length;
+  card(
+    '<div class="eyebrow">' + opener + of + '</div>' +
+    (heal ? '<div class="heal">Cutman patches you up <b>+' + heal + '</b> chin</div>' : '') +
+    '<h2 class="who" style="color:' + sp.accent + '">' + sp.name + '</h2>' +
+    '<div class="rec">' + sp.rec + ' &nbsp;·&nbsp; ' + sp.style + '</div>' +
+    '<p class="warn">' + sp.warn + '</p>' +
+    '<p class="tip"><b>Corner says:</b> ' + sp.tip + '</p>',
+    [{ label:RUN.bout === 0 ? 'Out you go' : 'Next man', fn:startBout }]);
+}
+function lostCard(){
+  const sp = curSpec();
+  const m = M();
+  const head = m.endless
+    ? '<h1><span class="a">' + RUN.kos + '</span><span class="b">' + (RUN.kos === 1 ? 'Man' : 'Men') + '</span></h1>'
+    : '<h1><span class="a">You</span><span class="b">Slept</span></h1>';
+  const line = m.endless
+    ? 'You put ' + RUN.kos + ' of them down before number ' + (RUN.bout+1) + ' put you down.'
+    : sp.name + ' put you down' + (m.pick ? '.' : ' in bout ' + (RUN.bout+1) + ' of ' + ROSTER.length + '.');
+  card(head + '<p class="sub">' + line + '</p>' +
+    '<div class="stats">Best combo <b>' + RUN.bestCombo + '</b> · Total damage <b>' + RUN.totalDmg +
+      '</b> · He had <b>' + Math.round(G.foeHP/G.foeMax*100) + '%</b> left</div>',
+    [{ label:'Same man again', fn:function(){ G.meHP = Math.round(G.meMax*0.75); startBout(); } },
+     { label:'Menu', ghost:true, noFull:true, fn:menuCard }]);
+}
+function winCard(){
+  const m = M();
+  const mins = ((performance.now() - RUN.runT0)/60000);
+  if(m.pick){
+    card('<h1><span class="a">That\u2019ll</span><span class="b">Do</span></h1>' +
+      '<p class="sub">' + ROSTER[RUN.pick].name + ' is looking at the lights.</p>' +
+      '<div class="stats">Best combo <b>' + RUN.bestCombo + '</b> · Damage <b>' + RUN.totalDmg +
+      '</b> · Time <b>' + ((performance.now()-G.t0)/1000).toFixed(1) + 's</b></div>',
+      [{ label:'Again', fn:function(){ beginRun(); } },
+       { label:'Pick another', ghost:true, noFull:true, fn:pickCard }]);
+    bulbStorm(50);
+    return;
+  }
+  card('<h1><span class="a">Un</span><span class="b">defeated</span></h1>' +
+    '<p class="sub">' + (m.id === 'glassjaw'
+      ? 'Seven men made of glass, and you were the only one who didn\u2019t break.'
+      : 'Seven men. All of them horizontal. The belt is yours.') + '</p>' +
+    '<div class="stats">Best combo <b>' + RUN.bestCombo + '</b> · Total damage <b>' + RUN.totalDmg +
+      '</b> · Chin left <b>' + Math.round(G.meHP) + '%</b> · Night <b>' + mins.toFixed(1) + ' min</b></div>',
+    [{ label:'Do it again', fn:function(){ beginRun(); } },
+     { label:'Menu', ghost:true, noFull:true, fn:menuCard }]);
+  bulbStorm(80);
+}
+function championCard(){ winCard(); }
+function nextBout(){
+  RUN.totalDmg += G.damage; G.damage = 0;
+  RUN.bestCombo = Math.max(RUN.bestCombo, G.maxCombo);
+  RUN.kos++;
+  RUN.bout++;
+  RUN.spec = null;      // next man gets rolled fresh
+  const m = M();
+  if(m.pick){ winCard(); return; }
+  if(!m.endless && RUN.bout >= ROSTER.length){ winCard(); return; }
+  cornerCard();          // survival: they never run out of men
+}
+
+P.pos.set(0,0,1.1); F.pos.set(0,0,-1.1); F.yaw = Math.PI;
+applySpec(ROSTER[0]);
+resetFeet(P); resetFeet(F);
+recInit();
+applySquish();
+setBars();
+titleCard();
+
+// ============================================================ loop
+const clock = new THREE.Clock();
+let camRoll = 0, T = 0;
+const camPos = new V3(0, 1.9, 3), camLook = new V3(0, 1.5, 0);
+const fwd = new V3(), rgt = new V3();
+
+function faceEachOther(){
+  const dx = F.pos.x - P.pos.x, dz = F.pos.z - P.pos.z;
+  P.yaw = Math.atan2(-dx, -dz);
+  F.yaw = Math.atan2(dx, dz);
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  const raw = Math.min(clock.getDelta(), 0.05);
+  T += raw;
+  POST.uniforms.uTime.value = T;
+  padTick();                 // polled before the replay bail-out so A/skip work
+
+  if(paused){
+    renderer.setRenderTarget(rt); renderer.clear(); renderer.render(scene, camera);
+    renderer.setRenderTarget(null); renderer.render(postScene, postCam);
+    return;
+  }
+
+  // ---------- replay owns the bodies and the lens; sim stands down ----------
+  if(state === S.REPLAY){
+    replayTick(raw);
+    fxTick(raw);
+    postTick(raw);
+    renderer.setRenderTarget(rt);
+    renderer.clear();
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+    renderer.render(postScene, postCam);
+    return;
+  }
+
+  if(G.slow > 0) G.slow -= raw;
+  let dt = raw * (G.slow > 0 ? 0.28 : 1);
+  if(G.hitstop > 0){ G.hitstop -= raw; dt = 0; }
+
+  if(G.comboT > 0){ G.comboT -= raw; if(G.comboT <= 0){ G.combo = 0; G.lastPunch=''; UI.combo.style.opacity = 0; } }
+  if(G.counter > 0) G.counter -= raw;
+  if(G.invuln > 0) G.invuln -= raw;
+  if(G.weave > 0) G.weave -= raw;
+  if(shoutT > 0){
+    shoutT -= raw;
+    const k = Math.max(0, shoutT/0.9);
+    UI.shout.style.opacity = Math.min(1, k*2.4);
+    UI.shout.style.transform = 'translateX(-50%) scale(' + (1+k*0.35) + ') skewX(-9deg)';
+  }
+
+  // ---------- movement ----------
+  readKeys();
+  let pMoving = false;
+  if(state === S.FIGHT && dt > 0){
+    faceEachOther();
+    fwd.set(-Math.sin(P.yaw), 0, -Math.cos(P.yaw));   // player's forward = at the foe
+    rgt.set(-fwd.z, 0, fwd.x);
+    const sp = 2.05 * (G.blocking ? 0.5 : 1) * (P.punch ? 0.55 : 1);
+    if((move.x || move.z) && !SUPER.on){    // a flurry commits you
+      P.pos.addScaledVector(fwd, move.z*sp*dt);
+      P.pos.addScaledVector(rgt, move.x*sp*dt*0.9);
+      pMoving = true;
+    }
+    aiUpdate(dt);
+  }
+  // weave shifts you sideways too — it's an evasion, not a dance
+  const wv = G.weave > 0 ? Math.sin((1 - G.weave/0.42)*Math.PI) : 0;
+  if(wv > 0 && state === S.FIGHT){
+    fwd.set(-Math.sin(P.yaw), 0, -Math.cos(P.yaw));
+    rgt.set(-fwd.z, 0, fwd.x);
+    P.pos.addScaledVector(rgt, G.weaveDir * wv * 1.5 * raw);
+  }
+  // ring bounds + no walking through each other
+  [P, F].forEach(function(f){
+    f.pos.x = clamp(f.pos.x, -RING, RING);
+    f.pos.z = clamp(f.pos.z, -RING, RING);
+  });
+  {
+    const dx = F.pos.x - P.pos.x, dz = F.pos.z - P.pos.z;
+    const d = Math.hypot(dx,dz) || 0.001;
+    if(d < 0.92){
+      const push = (0.92 - d)/2, nx = dx/d, nz = dz/d;
+      F.pos.x += nx*push; F.pos.z += nz*push;
+      P.pos.x -= nx*push; P.pos.z -= nz*push;
+    }
+  }
+  if(state === S.FIGHT) superTick(dt);
+  faceEachOther();
+  P.group.position.set(P.pos.x, P.group.position.y, P.pos.z); P.group.rotation.y = P.yaw;
+  if(!F.dead){ F.group.position.set(F.pos.x, 0, F.pos.z); F.group.rotation.y = F.yaw; }
+
+  // ---------- punches ----------
+  [P, F].forEach(function(f){
+    if(!f.punch) return;
+    const pk = f.punch;
+    pk.t += dt / pk.mv.dur;
+    if(!pk.done && pk.t >= pk.mv.hit){ pk.done = true; if(pk.cb) pk.cb(); }
+    if(pk.t >= 1) f.punch = null;
+  });
+
+  // ---------- pose ----------
+  // Split in two: every body is posed first, THEN contacts are resolved against
+  // the real geometry, THEN the arms are solved so they follow the glove to
+  // where it actually stopped rather than where the punch wished it went.
+  function poseBody(f, isPlayer){
+    // weight shift: lean onto whichever foot is planted, bob with the step
+    const stepPhase = f.legs[0].stepT < 1 ? f.legs[0].stepT : (f.legs[1].stepT < 1 ? f.legs[1].stepT : -1);
+    const stepping = stepPhase >= 0;
+    const targetSway = stepping ? (f.legs[0].stepT < 1 ? 0.05 : -0.05) : 0;
+    f.sway += (targetSway - f.sway) * Math.min(1, raw*6);
+
+    const bob = Math.sin(T*(isPlayer?3.4:2.8) + (isPlayer?0:1.7)) * 0.022;
+    f.body.position.y = bob - (stepping ? Math.sin(stepPhase*Math.PI)*0.018 : 0);
+    f.body.position.x = f.sway;
+    f.body.rotation.y = Math.sin(T*(isPlayer?1.6:1.2))*0.05 + f.sway*0.5;
+
+    const blocking = isPlayer ? G.blocking : foeBlocking();
+    const gl = f.gloveL, gr = f.gloveR;
+    let tl = f.guardL.clone(), tr = f.guardR.clone();
+    tl.y += bob*1.4; tr.y += bob*1.4;
+    tl.x += f.sway; tr.x += f.sway;
+    if(blocking){ tl.set(-0.20,1.70,-0.34); tr.set(0.22,1.70,-0.32); f.body.rotation.x = 0.08; }
+    else f.body.rotation.x = 0;
+
+    if(!isPlayer && AI.phase === 'wind' && AI.punchName){
+      const w = 1 - Math.max(0, AI.t/Math.max(AI.wind,0.001));
+      if(sideOf(f, MOVES[AI.punchName]) === 'L'){ tl.z += 0.24*w; tl.x -= 0.1*w; }
+      else { tr.z += 0.24*w; tr.x += 0.1*w; }
+    }
+
+    let side = '';
+    if(f.punch){
+      const pk = f.punch;
+      // re-aim every frame at where his head IS, not where it was when the
+      // punch left. otherwise a man who steps while you're mid-punch gets hit
+      // by a glove pointed at his memory.
+      pk.target.copy(punchTarget(f, pk.mv));
+      const p = pathPos(f, pk.mv, Math.min(pk.t,1), pk.target);
+      side = sideOf(f, pk.mv);
+      if(side === 'L') tl.copy(p); else tr.copy(p);
+      const e = Math.sin(Math.min(pk.t,1)*Math.PI);
+      // turn INTO the punch — the throwing shoulder comes forward. the old
+      // sign rotated it away, which the stretchy stick-arm quietly hid.
+      f.body.rotation.y += (side === 'L' ? -0.30 : 0.34)*e;
+      f.body.position.z = -0.30*e;
+      f.body.rotation.x = (pk.mv.arc === 'upper' ? -0.16 : 0.10)*e;
+    } else f.body.position.z = 0;
+
+    // the throwing hand snaps to its path; the idle hand eases
+    const k = Math.min(1, dt*22);
+    if(side === 'L') gl.position.copy(tl); else gl.position.lerp(tl, k);
+    if(side === 'R') gr.position.copy(tr); else gr.position.lerp(tr, k);
+
+    if(f.stagger > 0){ f.stagger -= raw; f.body.rotation.z = Math.sin(f.stagger*70)*0.10; }
+    else {
+      f.body.rotation.z = 0;
+      f.head.position.z += (-0.02 - f.head.position.z) * Math.min(1, raw*8);
+      f.head.position.y += (1.80 - f.head.position.y) * Math.min(1, raw*8);
+      f.torso.rotation.x += (0 - f.torso.rotation.x) * Math.min(1, raw*8);
+    }
+    if(f.hurt > 0){
+      f.hurt -= raw*5;
+      const e = Math.max(0, f.hurt)*0.9;
+      f.mats.skin.emissive.setHex(0xFF2D55); f.mats.skin.emissiveIntensity = e;
+      f.mats.headMat.emissive.setHex(0xFF2D55); f.mats.headMat.emissiveIntensity = e;
+    }
+    f.body.updateMatrix();
+  }
+  function poseLimbs(f, moving){
+    f.body.updateMatrix();          // arms hang off the torso, so it has to be current
+    solveArm(f, 'L');
+    solveArm(f, 'R');
+    updateFeet(f, dt, moving);
+    solveLegs(f);
+  }
+  const fMoving = state === S.FIGHT;
+  if(!P.rag) poseBody(P, true);
+  if(!F.rag) poseBody(F, false);
+  resolveContacts();          // gloves stop on skin before the arms are solved
+  squishTick(raw);
+  if(P.rag){ ragTick(P, F, dt); ragApply(P); } else { poseLimbs(P, pMoving); avoidBones(P,'L',F); avoidBones(P,'R',F); }
+  if(F.rag){ ragTick(F, P, dt); ragApply(F); } else { poseLimbs(F, fMoving); avoidBones(F,'L',P); avoidBones(F,'R',P); }
+
+  // (no scripted fall — a ragdoll has the body from the moment he's out)
+  // lean from the waist — tilting the whole rig would rip the planted feet off the canvas
+  P.body.rotation.z = -G.weaveDir*wv*0.26;
+  P.body.rotation.y += G.weaveDir*wv*0.10;
+
+  // ---------- particles ----------
+  fxTick(raw);
+
+  // ---------- reach ring ----------
+  reachRing.visible = true;
+  reachRing.position.set(P.pos.x, 0.015, P.pos.z);
+  const d = gap();
+  const inRange = d <= MOVES.jab.range;
+  reachRing.material.color.setHex(inRange ? K.lemon : K.bone);
+  reachRing.material.opacity = inRange ? 0.20 : 0.06;
+  if(state === S.FIGHT){
+    UI.rngV.textContent = d < MOVES.upper.range ? 'INSIDE' : (inRange ? 'JAB' : 'OUT');
+    UI.rng.classList.toggle('far', !inRange);
+  }
+
+  // ---------- camera rig: over the player's shoulder, wherever he is ----------
+  fwd.set(-Math.sin(P.yaw), 0, -Math.cos(P.yaw));
+  rgt.set(-fwd.z, 0, fwd.x);
+  const tr = G.trauma; G.trauma = Math.max(0, G.trauma - raw*2.0);
+  const sh = tr*tr;
+  camPos.copy(P.pos)
+    .addScaledVector(fwd, -1.22)
+    .addScaledVector(rgt, 0.64);
+  camPos.y = 1.92;
+  camPos.x += (Math.random()-.5)*sh*0.44;
+  camPos.y += (Math.random()-.5)*sh*0.40;
+  camPos.z += (Math.random()-.5)*sh*0.44;
+  camLook.copy(P.pos)
+    .addScaledVector(fwd, Math.min(d, 2.6)*0.85 + 0.5)
+    .addScaledVector(rgt, -0.06);
+  camLook.y = 1.52 - Math.min(d,3)*0.02;
+  if(state === S.KO){ camLook.copy(F.pos); camLook.y = 0.9; }
+  camLook.x += (Math.random()-.5)*sh*0.18;
+  camLook.y += (Math.random()-.5)*sh*0.16;
+  camera.position.lerp(camPos, Math.min(1, raw*14));
+  camera.lookAt(camLook);
+  camRoll += ((-G.weaveDir*wv*0.13) - camRoll) * Math.min(1, raw*10);
+  camera.rotation.z += camRoll + (Math.random()-.5)*sh*0.06;
+  const wantFov = 56 - (G.counter>0?5:0) - (SUPER.on?6:0) + sh*3;
+  camera.fov += (wantFov - camera.fov) * Math.min(1, raw*6);
+  camera.updateProjectionMatrix();
+
+  // ---------- post decay ----------
+  postTick(raw);
+  const sh2 = G.trauma*G.trauma;
+  rimA.intensity = 2.4 + Math.sin(T*9)*0.3 + G.combo*0.06;
+  rimB.intensity = 1.9 + Math.cos(T*7)*0.3 + G.combo*0.05;
+  rimC.intensity = 1.4 + (G.meter/G.meterMax)*1.6;
+  shaft.material.opacity = 0.045 + sh2*0.05;
+
+  // every frame goes in the tape — a KO is worth watching twice
+  if(state === S.FIGHT || state === S.KO || state === S.DOWN) recFrame();
+
+  renderer.setRenderTarget(rt);
+  renderer.clear();
+  renderer.render(scene, camera);
+  renderer.setRenderTarget(null);
+  renderer.render(postScene, postCam);
+}
+
+// shared by the live loop and the replay ---------------------------------
+function fxTick(raw){
+  starTick(raw);
+  for(let i=0;i<parts.length;i++){
+    const p = parts[i];
+    if(p.life <= 0) continue;
+    p.life -= raw;
+    if(p.life <= 0){ p.m.visible = false; continue; }
+    p.m.position.addScaledVector(p.v, raw);
+    p.v.y -= 9*raw; p.v.multiplyScalar(1 - raw*2.2);
+    p.m.material.opacity = Math.min(1, p.life/p.max*1.6);
+    p.m.quaternion.copy(camera.quaternion);
+    p.m.rotateZ(p.spin);
+  }
+  for(let i=0;i<rings.length;i++){
+    const r = rings[i];
+    if(r.life <= 0) continue;
+    r.life -= raw*2.6;
+    if(r.life <= 0){ r.m.visible = false; continue; }
+    r.m.scale.setScalar((0.3 + (1-r.life)*3.2) * (r.m.userData.s||1));
+    r.m.material.opacity = r.life*0.85;
+    r.m.quaternion.copy(camera.quaternion);
+  }
+  crowdTick(raw);
+  if(Math.random() < (state === S.FIGHT ? 0.09 : 0.05)) popBulb();
+  for(let i=0;i<bulbs.length;i++){
+    const b = bulbs[i];
+    if(b.life <= 0) continue;
+    b.life -= raw*4.5;
+    if(b.life <= 0){ b.sp.material.opacity = 0; b.sp.scale.setScalar(0); continue; }
+    b.sp.material.opacity = b.life;
+    b.sp.scale.setScalar(0.25 + (1-b.life)*1.5);
+  }
+}
+function postTick(raw){
+  const U = POST.uniforms;
+  // counted down per rendered frame, so hit stop and slow-mo can't stretch it
+  U.uImpact.value = IMP.frames > 0 ? 1 : 0;
+  if(IMP.frames > 0) IMP.frames--;
+  U.uAber.value  += (0 - U.uAber.value)  * Math.min(1, raw*7);
+  U.uZoom.value  += (0 - U.uZoom.value)  * Math.min(1, raw*6);
+  U.uFlash.value += (0 - U.uFlash.value) * Math.min(1, raw*9);
+  U.uGlitch.value+= (0 - U.uGlitch.value)* Math.min(1, raw*11);
+  if(U.uShock.value > 0){ U.uShock.value += raw*2.4; if(U.uShock.value >= 1) U.uShock.value = 0; }
+  const satWant = 1 + Math.min(0.7, G.combo*0.035) + (SUPER.on?0.5:0) + (RP.on?0.25:0);
+  U.uSat.value += (satWant - U.uSat.value) * Math.min(1, raw*4);
+  U.uAber.value = Math.max(U.uAber.value, Math.min(0.004, G.combo*0.0002));
+}
+animate();
+})();
+</script>
+</body>
+</html>
